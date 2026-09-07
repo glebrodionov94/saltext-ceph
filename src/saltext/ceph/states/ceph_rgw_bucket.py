@@ -446,6 +446,53 @@ def _json_setting(function, name, daemon_name, owner, profile, *, tenant=None, l
     return rgw_state.json_value(value, label)
 
 
+def _lifecycle_document(value):
+    """Normalize Dashboard's XML-derived lifecycle read model to its write model."""
+    value = rgw_state.json_value(value or {}, "RGW bucket lifecycle")
+    if "LifecycleConfiguration" in value:
+        value = rgw_state.mapping(value["LifecycleConfiguration"], "lifecycle configuration")
+    value = dict(value)
+    if "Rule" in value and "Rules" not in value:
+        rules = value.pop("Rule")
+        value["Rules"] = rules if isinstance(rules, list) else [rules]
+    numeric_fields = {
+        "Days",
+        "NoncurrentDays",
+        "NewerNoncurrentVersions",
+        "DaysAfterInitiation",
+    }
+
+    def normalize(item):
+        if isinstance(item, Mapping):
+            return {
+                key: (
+                    int(member)
+                    if key in numeric_fields and str(member).isdigit()
+                    else normalize(member)
+                )
+                for key, member in item.items()
+            }
+        if isinstance(item, list):
+            return [normalize(member) for member in item]
+        return item
+
+    return normalize(value)
+
+
+def _lifecycle(name, daemon_name, owner, tenant, profile):
+    return _lifecycle_document(
+        _json_setting(
+            "ceph_rgw_bucket.get_lifecycle",
+            name,
+            daemon_name,
+            owner,
+            profile,
+            tenant=tenant,
+            label="RGW bucket lifecycle",
+        )
+    )
+
+
 def lifecycle_present(
     name,
     lifecycle,
@@ -465,15 +512,7 @@ def lifecycle_present(
         daemon_name = common.optional_text(daemon_name, "daemon_name")
         owner = common.optional_text(owner, "owner")
         tenant = common.optional_text(tenant, "tenant")
-        old = _json_setting(
-            "ceph_rgw_bucket.get_lifecycle",
-            name,
-            daemon_name,
-            owner,
-            profile,
-            tenant=tenant,
-            label="RGW bucket lifecycle",
-        )
+        old = _lifecycle(name, daemon_name, owner, tenant, profile)
         if rgw_state.canonical(old) == rgw_state.canonical(desired):
             return reconcile.no_change(ret, f"RGW bucket {name} lifecycle is current.")
         if __opts__.get("test", False):
@@ -489,15 +528,7 @@ def lifecycle_present(
             profile=profile,
         )
         _wait(response, profile, task_timeout, task_interval)
-        after = _json_setting(
-            "ceph_rgw_bucket.get_lifecycle",
-            name,
-            daemon_name,
-            owner,
-            profile,
-            tenant=tenant,
-            label="RGW bucket lifecycle",
-        )
+        after = _lifecycle(name, daemon_name, owner, tenant, profile)
         if rgw_state.canonical(after) != rgw_state.canonical(desired):
             raise ProtocolError(f"RGW bucket {name} lifecycle did not converge.")
         return reconcile.changed(ret, old, after, f"RGW bucket {name} lifecycle was reconciled.")
@@ -523,15 +554,7 @@ def lifecycle_absent(
         owner = common.optional_text(owner, "owner")
         tenant = common.optional_text(tenant, "tenant")
         confirm = common.boolean(confirm, "confirm")
-        old = _json_setting(
-            "ceph_rgw_bucket.get_lifecycle",
-            name,
-            daemon_name,
-            owner,
-            profile,
-            tenant=tenant,
-            label="RGW bucket lifecycle",
-        )
+        old = _lifecycle(name, daemon_name, owner, tenant, profile)
         if old in ({}, None):
             return reconcile.no_change(ret, f"RGW bucket {name} lifecycle is already absent.")
         if __opts__.get("test", False):
@@ -548,15 +571,7 @@ def lifecycle_absent(
             profile=profile,
         )
         _wait(response, profile, task_timeout, task_interval)
-        after = _json_setting(
-            "ceph_rgw_bucket.get_lifecycle",
-            name,
-            daemon_name,
-            owner,
-            profile,
-            tenant=tenant,
-            label="RGW bucket lifecycle",
-        )
+        after = _lifecycle(name, daemon_name, owner, tenant, profile)
         if after not in ({}, None):
             raise ProtocolError(f"RGW bucket {name} lifecycle still exists.")
         return reconcile.changed(ret, old, {}, f"RGW bucket {name} lifecycle was deleted.")

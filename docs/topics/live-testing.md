@@ -217,17 +217,21 @@ failure rather than a successful lifecycle; inspect the service events and
 cephadm logs before retrying. Dashboard exposes daemon start, stop, restart,
 and redeploy actions, but no individual daemon-delete endpoint.
 
-The RGW lifecycle requires both `orchestrator` and `rgw` features and:
+The RGW lifecycles require both `orchestrator` and `rgw` features and:
 
-- `CEPH_TEST_RGW_SERVICE`, using a unique `rgw.saltext-ci-*` name;
-- `CEPH_TEST_RGW_HOST`, `CEPH_TEST_RGW_USER`, and `CEPH_TEST_RGW_BUCKET`;
+- `CEPH_TEST_RGW_EXISTING_SERVICE`, naming a running `rgw.saltext-ci-*` service;
+- `CEPH_TEST_RGW_HOST`, `CEPH_TEST_RGW_USER`, `CEPH_TEST_RGW_BUCKET_USER`,
+  `CEPH_TEST_RGW_TENANT_USER`, `CEPH_TEST_RGW_SUBUSER`, and `CEPH_TEST_RGW_BUCKET`;
 - allowlist entries `service:<service>`, `host:<placement-host>`,
-  `rgw-user:<uid>`, and `bucket:<bucket>`.
+  `rgw-user:<uid>` for each mutable user, and `bucket:<bucket>`.
 
-The host must already exist. The lifecycle deploys the service and waits for a
-running daemon, creates and updates an ownership-marked user, creates a bucket,
-enables bucket versioning, then removes the bucket, user, and service in that
-order.
+The host and service must already exist. One lifecycle verifies user and
+subuser creation, update, repeated application, confirmed deletion, and the
+explicit tenant-create limitation. The bucket lifecycle uses a distinct user
+identity to avoid Dashboard's per-UID S3-client cache, then verifies bucket
+creation, versioning, lifecycle creation/update/deletion, bucket-policy
+creation/update, repeated application, and cleanup. Bucket deletion removes its
+policy because Dashboard exposes no separate public policy-delete operation.
 
 ## Commands
 
@@ -271,9 +275,11 @@ Ceph 20.2.4 Tentacle cluster through a self-signed Dashboard endpoint. The 29
 read-only cases covered authentication, health, FSID, summary, monitor data,
 hardware data, cephadm host/service/daemon inventory, storage defaults, CRUSH and
 erasure profiles, and real Salt execution-module loading. Host registration and
-the three baseline OSD services converged idempotently. The RBD, CephFS, and RGW
-state lifecycles each passed create, update, repeated apply, and cleanup against
-the live cluster.
+the three baseline OSD services converged idempotently. The RBD and CephFS state
+lifecycles passed create, update, repeated apply, and cleanup. RGW user,
+subuser, bucket, versioning, lifecycle-document, and policy states passed their
+planned, mutation, idempotency, drift-update, and cleanup checks against the
+same live cluster.
 
 Ceph 20.2.4 has a Dashboard compatibility defect while an OSD removal is queued:
 the cephadm backend returns dictionaries, while the OSD controller dereferences

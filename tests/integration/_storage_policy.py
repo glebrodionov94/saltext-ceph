@@ -6,6 +6,7 @@ small request shape used by those tests.  It is kept independent of pytest so
 the policy can be covered exhaustively with fast unit tests.
 """
 
+import json
 import re
 from collections.abc import Mapping
 from urllib.parse import quote
@@ -129,6 +130,16 @@ class StorageWritePolicy:
         # Test identities contain only URL-safe characters; rejecting percent
         # escapes here prevents alternate spellings of the same capability.
         return encoded if "%" not in encoded else None
+
+    def _leased_path_item(self, kind, path, prefix):
+        """Resolve a path only when it exactly encodes one leased identity."""
+        matches = [
+            resource.split(":", 1)[1]
+            for resource in self._leased
+            if resource.startswith(f"{kind}:")
+            and path == f"{prefix}{quote(resource.split(':', 1)[1], safe='')}"
+        ]
+        return matches[0] if len(matches) == 1 else None
 
     def _pool(self, method, path, params, data):
         if method == "POST" and path == "/api/pool":
@@ -401,10 +412,48 @@ class StorageWritePolicy:
                 and data["generate_key"] is True
                 and self._rgw_daemon(data["daemon_name"])
             )
-        uid = self._unquoted_item(path, "/api/rgw/user/")
+        subuser_marker = "/subuser"
+        base_path = path
+        suffix = None
+        if subuser_marker in path:
+            base_path, suffix = path.split(subuser_marker, 1)
+        uid = self._leased_path_item("rgw-user", base_path, "/api/rgw/user/")
         if uid is None:
             return False
         self._require("rgw-user", uid)
+        if suffix == "":
+            if (
+                method != "POST"
+                or params is not None
+                or not _exact(
+                    data,
+                    (
+                        "subuser",
+                        "access",
+                        "key_type",
+                        "generate_secret",
+                        "daemon_name",
+                    ),
+                )
+            ):
+                return False
+            return (
+                data["subuser"] in ("saltext-ci-subuser", f"{uid}:saltext-ci-subuser")
+                and data["access"] in ("read", "readwrite")
+                and data["key_type"] == "swift"
+                and isinstance(data["generate_secret"], bool)
+                and self._rgw_daemon(data["daemon_name"])
+            )
+        if suffix == f"/{quote(f'{uid}:saltext-ci-subuser', safe='')}":
+            return (
+                method == "DELETE"
+                and _exact(params, ("purge_keys", "daemon_name"))
+                and params["purge_keys"] is True
+                and self._rgw_daemon(params["daemon_name"])
+                and data is None
+            )
+        if suffix is not None:
+            return False
         if method == "PUT":
             if params is not None or not _exact(
                 data,
@@ -425,7 +474,33 @@ class StorageWritePolicy:
             and data is None
         )
 
-    def _bucket(self, method, path, params, data):
+    def _bucket(self, method, path, params, data):  # pylint: disable=too-many-return-statements
+        if method == "PUT" and path == "/api/rgw/bucket/lifecycle":
+            if params is not None or not _exact(
+                data, ("bucket_name", "lifecycle", "daemon_name", "owner")
+            ):
+                return False
+            self._require("bucket", data["bucket_name"])
+            self._require("rgw-user", data["owner"])
+            try:
+                lifecycle = json.loads(data["lifecycle"])
+            except (TypeError, ValueError):
+                return False
+            if lifecycle != {}:
+                rules = lifecycle.get("Rules") if isinstance(lifecycle, Mapping) else None
+                if not isinstance(rules, list) or len(rules) != 1:
+                    return False
+                rule = rules[0]
+                if not _exact(rule, ("ID", "Status", "Prefix", "Expiration")):
+                    return False
+                if (
+                    rule["ID"] != "saltext-ci-expire"
+                    or rule["Status"] != "Enabled"
+                    or rule["Prefix"] != "saltext-ci/"
+                    or rule["Expiration"] not in ({"Days": 30}, {"Days": 60})
+                ):
+                    return False
+            return self._rgw_daemon(data["daemon_name"])
         if method == "POST" and path == "/api/rgw/bucket":
             if params is not None or not _exact(
                 data,
@@ -444,6 +519,50 @@ class StorageWritePolicy:
             return False
         self._require("bucket", bucket)
         if method == "PUT":
+            if isinstance(data, Mapping) and "bucket_policy" in data:
+                required = {
+                    "bucket_id",
+                    "uid",
+                    "encryption_state",
+                    "lifecycle",
+                    "bucket_policy",
+                    "daemon_name",
+                }
+                if set(data) != required:
+                    return False
+                self._require("rgw-user", data["uid"])
+                try:
+                    policy = json.loads(data["bucket_policy"])
+                except (TypeError, ValueError):
+                    return False
+                statements = policy.get("Statement") if isinstance(policy, Mapping) else None
+                statement = (
+                    statements[0] if isinstance(statements, list) and len(statements) == 1 else {}
+                )
+                return (
+                    params is None
+                    and policy.get("Version") == "2012-10-17"
+                    and isinstance(statements, list)
+                    and len(statements) == 1
+                    and _exact(
+                        statement,
+                        ("Sid", "Effect", "Principal", "Action", "Resource", "Condition"),
+                    )
+                    and statement.get("Sid")
+                    in ("DenyInsecureTransport", "DenyInsecureTransportUpdated")
+                    and statement.get("Effect") == "Deny"
+                    and statement.get("Principal") == "*"
+                    and statement.get("Action") == "s3:*"
+                    and statement.get("Resource")
+                    == [
+                        f"arn:aws:s3:::{bucket}",
+                        f"arn:aws:s3:::{bucket}/*",
+                    ]
+                    and statement.get("Condition") == {"Bool": {"aws:SecureTransport": "false"}}
+                    and data["encryption_state"] is False
+                    and isinstance(data["lifecycle"], str)
+                    and self._rgw_daemon(data["daemon_name"])
+                )
             if params is not None or not _exact(
                 data,
                 (

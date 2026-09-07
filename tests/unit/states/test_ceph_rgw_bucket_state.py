@@ -235,6 +235,44 @@ def test_lifecycle_compares_json_semantically(monkeypatch):
     set_.assert_not_called()
 
 
+def test_lifecycle_normalizes_xml_derived_read_model(monkeypatch):
+    current = {
+        "LifecycleConfiguration": {
+            "Rule": {
+                "ID": "expire",
+                "Prefix": "logs/",
+                "Status": "Enabled",
+                "Expiration": {"Days": "30"},
+            }
+        }
+    }
+    get = Mock(return_value=envelope(current))
+    set_ = Mock()
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {"ceph_rgw_bucket.get_lifecycle": get, "ceph_rgw_bucket.set_lifecycle": set_},
+    )
+
+    result = state.lifecycle_present(
+        "data",
+        {
+            "Rules": [
+                {
+                    "ID": "expire",
+                    "Prefix": "logs/",
+                    "Status": "Enabled",
+                    "Expiration": {"Days": 30},
+                }
+            ]
+        },
+    )
+
+    assert result["result"] is True
+    assert not result["changes"]
+    set_.assert_not_called()
+
+
 def test_lifecycle_absent_requires_confirmation(monkeypatch):
     monkeypatch.setattr(
         state,

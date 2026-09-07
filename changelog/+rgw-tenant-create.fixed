@@ -1,0 +1,1 @@
+Reject unsupported tenant-user creation before the Ceph Dashboard endpoint returns an opaque HTTP 500, while preserving tenant-aware reads and existing-user reconciliation.

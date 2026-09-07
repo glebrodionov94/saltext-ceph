@@ -1,0 +1,1 @@
+Normalize Dashboard's XML-derived bucket lifecycle response before state comparison, including Rule/Rules shape and numeric duration fields.

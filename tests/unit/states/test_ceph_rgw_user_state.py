@@ -67,6 +67,46 @@ def test_present_is_idempotent_and_normalizes_admin_ops_booleans(monkeypatch):
     salt["ceph_rgw_user.update_user"].assert_not_called()
 
 
+@pytest.mark.parametrize("declared", ["saltext-ci-tenant/alice", "saltext-ci-tenant$alice"])
+def test_present_is_idempotent_for_tenant_user_aliases(monkeypatch, declared):
+    tenant_user = user(
+        uid="alice",
+        full_user_id="saltext-ci-tenant$alice",
+        tenant="saltext-ci-tenant",
+    )
+    salt = reads(users=["saltext-ci-tenant$alice"], details=tenant_user)
+    salt["ceph_rgw_user.update_user"] = Mock()
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.present(declared, "Alice")
+
+    assert result["result"] is True
+    assert not result["changes"]
+    salt["ceph_rgw_user.get_user"].assert_called_once_with(
+        "saltext-ci-tenant$alice",
+        daemon_name=None,
+        stats=False,
+        include_secrets=False,
+        profile="default",
+    )
+    salt["ceph_rgw_user.update_user"].assert_not_called()
+
+
+def test_present_rejects_tenant_response_for_different_full_user(monkeypatch):
+    tenant_user = user(
+        uid="alice",
+        full_user_id="other-tenant$alice",
+        tenant="other-tenant",
+    )
+    salt = reads(users=["saltext-ci-tenant$alice"], details=tenant_user)
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.present("saltext-ci-tenant$alice", "Alice")
+
+    assert result["result"] is False
+    assert "different user" in result["comment"]
+
+
 def test_present_plans_creation_without_exposing_secret_source(monkeypatch, tmp_path):
     secret = tmp_path / "secret"
     secret.write_text("top-secret", encoding="utf-8")
@@ -99,6 +139,18 @@ def test_present_creates_waits_and_post_reads(monkeypatch):
     create.assert_called_once()
     assert create.call_args.kwargs["include_secrets"] is False
     wait.assert_called_once()
+
+
+def test_present_rejects_tenant_creation_before_mutation(monkeypatch):
+    salt = reads(users=[])
+    salt["ceph_rgw_user.create_user"] = Mock()
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.present("saltext-ci-tenant/alice", "Alice")
+
+    assert result["result"] is False
+    assert "cannot create tenant" in result["comment"]
+    salt["ceph_rgw_user.create_user"].assert_not_called()
 
 
 def test_present_updates_only_readable_fields(monkeypatch):
@@ -153,10 +205,43 @@ def test_subuser_update_never_rotates_credentials(monkeypatch):
     monkeypatch.setattr(state, "__salt__", salt)
     result = state.subuser_present("swift", "alice", "readwrite")
     assert result["result"] is True
+    assert salt["ceph_rgw_user.create_subuser"].call_args.args[1] == "alice:swift"
     kwargs = salt["ceph_rgw_user.create_subuser"].call_args.kwargs
     assert kwargs["generate_secret"] is False
     assert kwargs["access_key_source"] is None
     assert kwargs["secret_key_source"] is None
+
+
+def test_subuser_present_creates_then_post_reads(monkeypatch):
+    after = user(subusers=[{"id": "alice:swift", "permissions": "read"}])
+    salt = reads()
+    salt["ceph_rgw_user.list_users"].side_effect = [
+        envelope(["alice"]),
+        envelope(["alice"]),
+    ]
+    salt["ceph_rgw_user.get_user"].side_effect = [envelope(user()), envelope(after)]
+    salt["ceph_rgw_user.create_subuser"] = Mock(return_value=envelope(status=201))
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.subuser_present("swift", "alice", "read", key_type="swift")
+
+    assert result["result"] is True
+    kwargs = salt["ceph_rgw_user.create_subuser"].call_args.kwargs
+    assert kwargs["generate_secret"] is True
+    assert kwargs["key_type"] == "swift"
+
+
+def test_subuser_present_is_idempotent(monkeypatch):
+    current = user(subusers=[{"id": "alice:swift", "permissions": "read-write"}])
+    salt = reads(details=current)
+    salt["ceph_rgw_user.create_subuser"] = Mock()
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.subuser_present("swift", "alice", "readwrite", key_type="swift")
+
+    assert result["result"] is True
+    assert not result["changes"]
+    salt["ceph_rgw_user.create_subuser"].assert_not_called()
 
 
 def test_subuser_delete_requires_confirm(monkeypatch):
@@ -167,6 +252,30 @@ def test_subuser_delete_requires_confirm(monkeypatch):
     result = state.subuser_absent("swift", "alice")
     assert result["result"] is False
     salt["ceph_rgw_user.delete_subuser"].assert_not_called()
+
+
+def test_subuser_delete_confirms_and_post_reads(monkeypatch):
+    before = user(subusers=[{"id": "alice:swift", "permissions": "full-control"}])
+    salt = reads(details=before)
+    salt["ceph_rgw_user.list_users"].side_effect = [
+        envelope(["alice"]),
+        envelope(["alice"]),
+    ]
+    salt["ceph_rgw_user.get_user"].side_effect = [envelope(before), envelope(user())]
+    salt["ceph_rgw_user.delete_subuser"] = Mock(return_value=envelope(status=204))
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.subuser_absent("swift", "alice", confirm=True)
+
+    assert result["result"] is True
+    salt["ceph_rgw_user.delete_subuser"].assert_called_once_with(
+        "alice",
+        "alice:swift",
+        purge_keys=True,
+        daemon_name=None,
+        confirm=True,
+        profile="default",
+    )
 
 
 def test_capability_create_and_postcondition(monkeypatch):

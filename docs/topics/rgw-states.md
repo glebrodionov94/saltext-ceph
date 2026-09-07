@@ -34,6 +34,10 @@ does not converge.
 Salt test mode performs all validation and reads, reports the projected change,
 and sends no mutation. For example:
 
+Lifecycle reads are normalized from Dashboard's XML-derived
+`LifecycleConfiguration.Rule` representation to the declarative `Rules` write
+model. Numeric duration fields returned as strings are normalized to integers.
+
 ```yaml
 rgw-user-alice:
   ceph_rgw_user.present:
@@ -67,6 +71,7 @@ rgw-data-lifecycle:
         Rules:
           - ID: expire-old-data
             Status: Enabled
+            Prefix: archive/
             Expiration:
               Days: 90
     - profile: production

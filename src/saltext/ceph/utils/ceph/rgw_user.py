@@ -29,6 +29,17 @@ def _key_type(value):
     return value
 
 
+def _creatable_uid(value):
+    """Reject tenant creation, which the public Dashboard endpoint cannot express."""
+    value = common.name(value, "uid")
+    if "$" in value or "/" in value:
+        raise ConfigurationError(
+            "The Ceph Dashboard API cannot create tenant users because its user-create "
+            "endpoint has no tenant parameter."
+        )
+    return value
+
+
 def _list_result(response, detailed, include_secrets):
     if not isinstance(response.data, list):
         raise ProtocolError("RGW user list returned an unexpected response shape.")
@@ -116,7 +127,7 @@ def create_user(
     """Create a user; account fields are current-only and credentials are redacted."""
     include_secrets = common.boolean(include_secrets, "include_secrets")
     data = common.params(
-        uid=common.name(uid, "uid"),
+        uid=_creatable_uid(uid),
         display_name=common.name(display_name, "display_name"),
         email=common.optional_text(email, "email"),
         max_buckets=_optional_limit(max_buckets, "max_buckets"),

@@ -40,7 +40,6 @@ from ._storage_live import bind_pool_state
 from ._storage_live import bind_rbd_state
 from ._storage_live import bind_rgw_bucket_state
 from ._storage_live import bind_rgw_user_state
-from ._storage_live import bind_service_state
 from ._storage_live import required_identity
 
 pytestmark = pytest.mark.ceph_live
@@ -1076,18 +1075,256 @@ def test_live_cephfs_pool_group_subvolume_snapshot_lifecycle(monkeypatch, live_c
 
 @pytest.mark.ceph_live_destructive
 @pytest.mark.ceph_live_feature("orchestrator", "rgw")
-def test_live_rgw_service_user_bucket_lifecycle(monkeypatch, live_client):
-    """Deploy an RGW service, reconcile a user and bucket, then remove all three."""
-    _require_storage_baseline(live_client)
-    service_name = required_identity("CEPH_TEST_RGW_SERVICE")
+def test_live_rgw_tenant_user_and_subuser_lifecycle(monkeypatch, live_client):
+    """Reject unsupported tenant creation, then reconcile a user and subuser."""
+    service_name = required_identity("CEPH_TEST_RGW_EXISTING_SERVICE")
     service_host = required_identity("CEPH_TEST_RGW_HOST")
     uid = required_identity("CEPH_TEST_RGW_USER")
+    tenant_uid = required_identity("CEPH_TEST_RGW_TENANT_USER")
+    subuser = required_identity("CEPH_TEST_RGW_SUBUSER")
+    if tenant_uid.count("$") != 1:
+        raise pytest.UsageError("CEPH_TEST_RGW_TENANT_USER must use tenant$user syntax.")
+    if subuser != "saltext-ci-subuser":
+        raise pytest.UsageError("CEPH_TEST_RGW_SUBUSER must be saltext-ci-subuser.")
+    owner_marker = f"saltext-ci-owner:{uid}"
+    resources = (f"service:{service_name}", f"host:{service_host}", f"rgw-user:{uid}")
+    opts = bind_rgw_user_state(monkeypatch, live_client, test=True)
+
+    if _service(live_client, service_name) is None:
+        pytest.fail(f"required RGW service {service_name} is absent")
+    daemon_name = _wait_for_rgw_ready(live_client, service_name, service_host)
+    if _rgw_user(live_client, uid, daemon_name) is not None:
+        pytest.fail(f"refusing to claim pre-existing RGW user {uid}")
+
+    with live_client.infrastructure_lease(*resources):
+        claimed = False
+        confirmed_absent = False
+        try:
+            tenant_result = rgw_user_state.present(
+                tenant_uid,
+                f"saltext-ci-owner:{tenant_uid}",
+                daemon_name=daemon_name,
+                profile=_PROFILE,
+            )
+            assert tenant_result["result"] is False
+            assert "cannot create tenant" in tenant_result["comment"]
+            assert _rgw_user(live_client, tenant_uid, daemon_name) is None
+
+            assert_plan(
+                rgw_user_state.present(
+                    uid,
+                    owner_marker,
+                    max_buckets=4,
+                    system=False,
+                    suspended=False,
+                    generate_key=True,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+            opts["test"] = False
+            assert_changed(
+                rgw_user_state.present(
+                    uid,
+                    owner_marker,
+                    max_buckets=4,
+                    system=False,
+                    suspended=False,
+                    generate_key=True,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            claimed = True
+            assert_current(
+                rgw_user_state.present(
+                    uid,
+                    owner_marker,
+                    max_buckets=4,
+                    system=False,
+                    suspended=False,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+
+            opts["test"] = True
+            update_plan = rgw_user_state.present(
+                uid,
+                f"{owner_marker}:updated",
+                max_buckets=8,
+                system=False,
+                suspended=False,
+                daemon_name=daemon_name,
+                profile=_PROFILE,
+            )
+            assert update_plan["result"] is None, update_plan["comment"]
+            opts["test"] = False
+            assert_changed(
+                rgw_user_state.present(
+                    uid,
+                    f"{owner_marker}:updated",
+                    max_buckets=8,
+                    system=False,
+                    suspended=False,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_user_state.present(
+                    uid,
+                    f"{owner_marker}:updated",
+                    max_buckets=8,
+                    system=False,
+                    suspended=False,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+
+            opts["test"] = True
+            assert_plan(
+                rgw_user_state.subuser_present(
+                    subuser,
+                    uid,
+                    "read",
+                    key_type="swift",
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+            opts["test"] = False
+            assert_changed(
+                rgw_user_state.subuser_present(
+                    subuser,
+                    uid,
+                    "read",
+                    key_type="swift",
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_user_state.subuser_present(
+                    subuser,
+                    uid,
+                    "read",
+                    key_type="swift",
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+
+            opts["test"] = True
+            subuser_update_plan = rgw_user_state.subuser_present(
+                subuser,
+                uid,
+                "readwrite",
+                key_type="swift",
+                daemon_name=daemon_name,
+                profile=_PROFILE,
+            )
+            assert subuser_update_plan["result"] is None, subuser_update_plan["comment"]
+            opts["test"] = False
+            assert_changed(
+                rgw_user_state.subuser_present(
+                    subuser,
+                    uid,
+                    "readwrite",
+                    key_type="swift",
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_user_state.subuser_present(
+                    subuser,
+                    uid,
+                    "readwrite",
+                    key_type="swift",
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                )
+            )
+
+            opts["test"] = True
+            subuser_delete_plan = rgw_user_state.subuser_absent(
+                subuser, uid, daemon_name=daemon_name, profile=_PROFILE
+            )
+            assert subuser_delete_plan["result"] is None, subuser_delete_plan["comment"]
+            opts["test"] = False
+            refused = rgw_user_state.subuser_absent(
+                subuser, uid, daemon_name=daemon_name, profile=_PROFILE
+            )
+            assert refused["result"] is False
+            assert "confirm=True" in refused["comment"]
+            assert_changed(
+                rgw_user_state.subuser_absent(
+                    subuser,
+                    uid,
+                    daemon_name=daemon_name,
+                    confirm=True,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_user_state.subuser_absent(
+                    subuser, uid, daemon_name=daemon_name, profile=_PROFILE
+                )
+            )
+
+            opts["test"] = True
+            user_delete_plan = rgw_user_state.absent(uid, daemon_name=daemon_name, profile=_PROFILE)
+            assert user_delete_plan["result"] is None, user_delete_plan["comment"]
+            opts["test"] = False
+            refused = rgw_user_state.absent(uid, daemon_name=daemon_name, profile=_PROFILE)
+            assert refused["result"] is False
+            assert "confirm=True" in refused["comment"]
+            assert_changed(
+                rgw_user_state.absent(
+                    uid,
+                    daemon_name=daemon_name,
+                    confirm=True,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(rgw_user_state.absent(uid, daemon_name=daemon_name, profile=_PROFILE))
+            confirmed_absent = True
+        finally:
+            opts["test"] = False
+            if claimed and not confirmed_absent:
+                if _owned_rgw_user(live_client, uid, owner_marker, daemon_name) is not None:
+                    result = rgw_user_state.absent(
+                        uid,
+                        daemon_name=daemon_name,
+                        confirm=True,
+                        profile=_PROFILE,
+                        task_interval=0.5,
+                    )
+                    assert result["result"] is True, result["comment"]
+
+
+@pytest.mark.ceph_live_destructive
+@pytest.mark.ceph_live_feature("orchestrator", "rgw")
+def test_live_rgw_service_user_bucket_lifecycle(  # pylint: disable=too-many-statements
+    monkeypatch, live_client
+):
+    """Reconcile a user, bucket, lifecycle, and policy on an existing RGW service."""
+    service_name = required_identity("CEPH_TEST_RGW_EXISTING_SERVICE")
+    service_host = required_identity("CEPH_TEST_RGW_HOST")
+    uid = required_identity("CEPH_TEST_RGW_BUCKET_USER")
     bucket = required_identity("CEPH_TEST_RGW_BUCKET")
     if not service_name.startswith("rgw.saltext-ci-"):
         raise pytest.UsageError(
             "CEPH_TEST_RGW_SERVICE must use a unique rgw.saltext-ci-* service name."
         )
-    service_id = service_name.split(".", 1)[1]
     owner_marker = f"saltext-ci-owner:{uid}"
     resources = (
         f"service:{service_name}",
@@ -1095,36 +1332,19 @@ def test_live_rgw_service_user_bucket_lifecycle(monkeypatch, live_client):
         f"rgw-user:{uid}",
         f"bucket:{bucket}",
     )
-    service_opts = bind_service_state(monkeypatch, live_client, test=True)
     user_opts = bind_rgw_user_state(monkeypatch, live_client, test=True)
     bucket_opts = bind_rgw_bucket_state(monkeypatch, live_client, test=True)
-    service_spec = {
-        "service_type": "rgw",
-        "service_id": service_id,
-        "placement": {"hosts": [service_host], "count": 1},
-    }
 
-    if _service(live_client, service_name) is not None:
-        pytest.fail(f"refusing to claim pre-existing service {service_name}")
+    if _service(live_client, service_name) is None:
+        pytest.fail(f"required RGW service {service_name} is absent")
     if _host(live_client, service_host) is None:
         pytest.fail(f"RGW placement host {service_host} is absent from the orchestrator")
 
     with live_client.infrastructure_lease(*resources):
         rgw_claims_proven = False
         daemon_name = None
-        confirmed_absent = set()
+        confirmed_absent = {"service"}
         try:
-            assert_plan(service_state.present(service_name, service_spec, profile=_PROFILE))
-            service_opts["test"] = False
-            assert_changed(
-                service_state.present(
-                    service_name,
-                    service_spec,
-                    profile=_PROFILE,
-                    task_interval=0.5,
-                )
-            )
-            assert_current(service_state.present(service_name, service_spec, profile=_PROFILE))
             _wait_for_running_service(live_client, service_name)
             daemon_name = _wait_for_rgw_ready(live_client, service_name, service_host)
 
@@ -1262,6 +1482,173 @@ def test_live_rgw_service_user_bucket_lifecycle(monkeypatch, live_client):
                 )
             )
 
+            lifecycle = {
+                "Rules": [
+                    {
+                        "ID": "saltext-ci-expire",
+                        "Status": "Enabled",
+                        "Prefix": "saltext-ci/",
+                        "Expiration": {"Days": 30},
+                    }
+                ]
+            }
+            lifecycle_updated = {
+                "Rules": [
+                    {
+                        "ID": "saltext-ci-expire",
+                        "Status": "Enabled",
+                        "Prefix": "saltext-ci/",
+                        "Expiration": {"Days": 60},
+                    }
+                ]
+            }
+            bucket_opts["test"] = True
+            lifecycle_plan = rgw_bucket_state.lifecycle_present(
+                bucket,
+                lifecycle,
+                daemon_name=daemon_name,
+                owner=uid,
+                profile=_PROFILE,
+            )
+            assert lifecycle_plan["result"] is None, lifecycle_plan["comment"]
+            bucket_opts["test"] = False
+            lifecycle_result = rgw_bucket_state.lifecycle_present(
+                bucket,
+                lifecycle,
+                daemon_name=daemon_name,
+                owner=uid,
+                profile=_PROFILE,
+                task_interval=0.5,
+            )
+            assert_changed(lifecycle_result)
+            assert_current(
+                rgw_bucket_state.lifecycle_present(
+                    bucket,
+                    lifecycle,
+                    daemon_name=daemon_name,
+                    owner=uid,
+                    profile=_PROFILE,
+                )
+            )
+
+            bucket_opts["test"] = True
+            lifecycle_update_plan = rgw_bucket_state.lifecycle_present(
+                bucket,
+                lifecycle_updated,
+                daemon_name=daemon_name,
+                owner=uid,
+                profile=_PROFILE,
+            )
+            assert lifecycle_update_plan["result"] is None, lifecycle_update_plan["comment"]
+            bucket_opts["test"] = False
+            assert_changed(
+                rgw_bucket_state.lifecycle_present(
+                    bucket,
+                    lifecycle_updated,
+                    daemon_name=daemon_name,
+                    owner=uid,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_bucket_state.lifecycle_present(
+                    bucket,
+                    lifecycle_updated,
+                    daemon_name=daemon_name,
+                    owner=uid,
+                    profile=_PROFILE,
+                )
+            )
+
+            def transport_policy(sid):
+                return {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": sid,
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                f"arn:aws:s3:::{bucket}",
+                                f"arn:aws:s3:::{bucket}/*",
+                            ],
+                            "Condition": {"Bool": {"aws:SecureTransport": "false"}},
+                        }
+                    ],
+                }
+
+            policy = transport_policy("DenyInsecureTransport")
+            policy_updated = transport_policy("DenyInsecureTransportUpdated")
+            bucket_opts["test"] = True
+            policy_plan = rgw_bucket_state.policy_present(
+                bucket, policy, daemon_name=daemon_name, profile=_PROFILE
+            )
+            assert policy_plan["result"] is None, policy_plan["comment"]
+            bucket_opts["test"] = False
+            assert_changed(
+                rgw_bucket_state.policy_present(
+                    bucket,
+                    policy,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_bucket_state.policy_present(
+                    bucket, policy, daemon_name=daemon_name, profile=_PROFILE
+                )
+            )
+            bucket_opts["test"] = True
+            policy_update_plan = rgw_bucket_state.policy_present(
+                bucket, policy_updated, daemon_name=daemon_name, profile=_PROFILE
+            )
+            assert policy_update_plan["result"] is None, policy_update_plan["comment"]
+            bucket_opts["test"] = False
+            assert_changed(
+                rgw_bucket_state.policy_present(
+                    bucket,
+                    policy_updated,
+                    daemon_name=daemon_name,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_bucket_state.policy_present(
+                    bucket, policy_updated, daemon_name=daemon_name, profile=_PROFILE
+                )
+            )
+
+            bucket_opts["test"] = True
+            lifecycle_delete_plan = rgw_bucket_state.lifecycle_absent(
+                bucket, daemon_name=daemon_name, owner=uid, profile=_PROFILE
+            )
+            assert lifecycle_delete_plan["result"] is None, lifecycle_delete_plan["comment"]
+            bucket_opts["test"] = False
+            refused = rgw_bucket_state.lifecycle_absent(
+                bucket, daemon_name=daemon_name, owner=uid, profile=_PROFILE
+            )
+            assert refused["result"] is False
+            assert "confirm=True" in refused["comment"]
+            assert_changed(
+                rgw_bucket_state.lifecycle_absent(
+                    bucket,
+                    daemon_name=daemon_name,
+                    owner=uid,
+                    confirm=True,
+                    profile=_PROFILE,
+                    task_interval=0.5,
+                )
+            )
+            assert_current(
+                rgw_bucket_state.lifecycle_absent(
+                    bucket, daemon_name=daemon_name, owner=uid, profile=_PROFILE
+                )
+            )
+
             bucket_opts["test"] = True
             assert (
                 rgw_bucket_state.absent(
@@ -1325,25 +1712,11 @@ def test_live_rgw_service_user_bucket_lifecycle(monkeypatch, live_client):
             )
             confirmed_absent.add("user")
 
-            service_opts["test"] = True
-            assert service_state.absent(service_name, profile=_PROFILE)["result"] is None
-            service_opts["test"] = False
-            assert_changed(
-                service_state.absent(
-                    service_name,
-                    confirm=True,
-                    profile=_PROFILE,
-                    task_interval=0.5,
-                )
-            )
-            assert_current(service_state.absent(service_name, profile=_PROFILE))
-            confirmed_absent.add("service")
         finally:
             _, primary_error, primary_traceback = sys.exc_info()
             try:
                 bucket_opts["test"] = False
                 user_opts["test"] = False
-                service_opts["test"] = False
                 _cleanup_rgw_resources(
                     live_client,
                     _RgwLifecycleResources(

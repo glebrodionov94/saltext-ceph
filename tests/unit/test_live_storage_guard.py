@@ -1,5 +1,6 @@
 """Tests for the destructive live storage request boundary."""
 
+import json
 from urllib.parse import quote
 
 import pytest
@@ -435,6 +436,103 @@ def test_rejects_rgw_write_without_matching_service_lease():
     }
 
     assert policy.authorize("POST", "/api/rgw/user", "1.0", None, data) is False
+
+
+def test_allows_subuser_lifecycle():
+    encoded_uid = quote(UID, safe="")
+    subuser_policy = StorageWritePolicy(LEASED)
+    create_subuser = {
+        "subuser": "saltext-ci-subuser",
+        "access": "read",
+        "key_type": "swift",
+        "generate_secret": True,
+        "daemon_name": RGW_DAEMON,
+    }
+    update_subuser = {
+        **create_subuser,
+        "subuser": f"{UID}:saltext-ci-subuser",
+        "access": "readwrite",
+        "generate_secret": False,
+    }
+    delete_subuser = {"purge_keys": True, "daemon_name": RGW_DAEMON}
+
+    assert subuser_policy.authorize(
+        "POST", f"/api/rgw/user/{encoded_uid}/subuser", "1.0", None, create_subuser
+    )
+    assert subuser_policy.authorize(
+        "POST", f"/api/rgw/user/{encoded_uid}/subuser", "1.0", None, update_subuser
+    )
+    assert subuser_policy.authorize(
+        "DELETE",
+        f"/api/rgw/user/{encoded_uid}/subuser/{quote(f'{UID}:saltext-ci-subuser', safe='')}",
+        "1.0",
+        delete_subuser,
+        None,
+    )
+
+
+def test_rejects_subuser_for_unleased_user():
+    subuser_policy = StorageWritePolicy((f"service:{RGW_SERVICE}", f"rgw-user:{UID}"))
+    data = {
+        "subuser": "saltext-ci-subuser",
+        "access": "read",
+        "key_type": "swift",
+        "generate_secret": True,
+        "daemon_name": RGW_DAEMON,
+    }
+
+    assert (
+        subuser_policy.authorize(
+            "POST",
+            "/api/rgw/user/saltext-ci-other/subuser",
+            "1.0",
+            None,
+            data,
+        )
+        is False
+    )
+
+
+def test_allows_bounded_bucket_lifecycle_write(policy):
+    lifecycle = {
+        "Rules": [
+            {
+                "ID": "saltext-ci-expire",
+                "Status": "Enabled",
+                "Prefix": "saltext-ci/",
+                "Expiration": {"Days": 30},
+            }
+        ]
+    }
+    data = {
+        "bucket_name": BUCKET,
+        "lifecycle": json.dumps(lifecycle),
+        "daemon_name": RGW_DAEMON,
+        "owner": UID,
+    }
+
+    assert policy.authorize("PUT", "/api/rgw/bucket/lifecycle", "1.0", None, data)
+
+
+def test_allows_bounded_bucket_policy_write(policy):
+    statement = {
+        "Sid": "DenyInsecureTransport",
+        "Effect": "Deny",
+        "Principal": "*",
+        "Action": "s3:*",
+        "Resource": [f"arn:aws:s3:::{BUCKET}", f"arn:aws:s3:::{BUCKET}/*"],
+        "Condition": {"Bool": {"aws:SecureTransport": "false"}},
+    }
+    data = {
+        "bucket_id": "safe-bucket-id",
+        "uid": UID,
+        "encryption_state": False,
+        "lifecycle": "{}",
+        "bucket_policy": json.dumps({"Version": "2012-10-17", "Statement": [statement]}),
+        "daemon_name": RGW_DAEMON,
+    }
+
+    assert policy.authorize("PUT", f"/api/rgw/bucket/{BUCKET}", "1.0", None, data)
 
 
 @pytest.mark.parametrize(

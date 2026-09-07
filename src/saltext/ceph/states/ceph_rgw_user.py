@@ -44,7 +44,30 @@ def _wait(response, profile, timeout, interval):
     )
 
 
+def _canonical_uid(value):
+    """Return the Admin Ops identity used by user listings for tenant users."""
+    value = common.name(value, "uid")
+    if "/" in value and "$" not in value:
+        tenant, separator, uid = value.partition("/")
+        if separator and tenant and uid and "/" not in uid:
+            return f"{tenant}${uid}"
+    return value
+
+
+def _response_uid(value):
+    """Extract a full tenant-aware identity from a Dashboard user response."""
+    full_user_id = value.get("full_user_id")
+    if isinstance(full_user_id, str) and full_user_id:
+        return _canonical_uid(full_user_id)
+    uid = value.get("uid")
+    tenant = value.get("tenant")
+    if isinstance(tenant, str) and tenant:
+        return _canonical_uid(f"{tenant}${uid}")
+    return _canonical_uid(uid)
+
+
 def _user(uid, daemon_name, profile):
+    uid = _canonical_uid(uid)
     values = reconcile.data(
         __salt__["ceph_rgw_user.list_users"](
             daemon_name=daemon_name,
@@ -57,9 +80,10 @@ def _user(uid, daemon_name, profile):
     )
     if not all(isinstance(item, str) for item in values):
         raise ProtocolError("RGW user list returned an unexpected response shape.")
-    if values.count(uid) > 1:
+    matches = [value for value in values if _canonical_uid(value) == uid]
+    if len(matches) > 1:
         raise ProtocolError(f"RGW user list returned duplicate user {uid}.")
-    if uid not in values:
+    if not matches:
         return None
     value = reconcile.data(
         __salt__["ceph_rgw_user.get_user"](
@@ -72,7 +96,7 @@ def _user(uid, daemon_name, profile):
         "RGW user read",
         expected=Mapping,
     )
-    if value.get("uid", value.get("full_user_id")) != uid:
+    if _response_uid(value) != uid:
         raise ProtocolError("RGW user read returned a different user.")
     return dict(value)
 
@@ -88,7 +112,9 @@ def _user_view(current, desired):
         return None
     result = {}
     for key in desired:
-        if key == "account_root_user":
+        if key == "uid":
+            result[key] = _response_uid(current)
+        elif key == "account_root_user":
             result[key] = current.get("type") == "root"
         elif key in ("system", "suspended"):
             result[key] = _optional_response_bool(current, key)
@@ -110,7 +136,7 @@ def _desired_user(
     account_root_user,
 ):
     desired = {
-        "uid": common.name(uid, "uid"),
+        "uid": _canonical_uid(uid),
         "display_name": common.name(display_name, "display_name"),
     }
     optional = {
@@ -168,6 +194,12 @@ def present(
         old = _user_view(current, desired)
         if old == desired:
             return reconcile.no_change(ret, f"RGW user {name} is current.")
+        if current is None and "$" in name:
+            raise ConfigurationError(
+                "The Ceph Dashboard API cannot create tenant users because its user-create "
+                "endpoint has no tenant parameter. Existing tenant users remain readable "
+                "and manageable."
+            )
         if (
             current is not None
             and old.get("account_root_user") is True
@@ -313,7 +345,7 @@ def subuser_present(
             )
         response = __salt__["ceph_rgw_user.create_subuser"](
             uid,
-            name,
+            name if old is None or ":" in name else f"{uid}:{name}",
             access,
             key_type=key_type,
             generate_secret=generate_secret if old is None else False,
@@ -363,7 +395,7 @@ def subuser_absent(
             raise ConfigurationError("Deleting an RGW subuser requires confirm=True.")
         response = __salt__["ceph_rgw_user.delete_subuser"](
             uid,
-            name,
+            name if ":" in name else f"{uid}:{name}",
             purge_keys=purge_keys,
             daemon_name=daemon_name,
             confirm=True,

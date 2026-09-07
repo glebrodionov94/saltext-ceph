@@ -128,6 +128,13 @@ def test_create_user_omits_current_account_fields_for_reef_defaults(client):
     }
 
 
+@pytest.mark.parametrize("uid", ["tenant$alice", "tenant/alice"])
+def test_create_user_rejects_unsupported_tenant_identity(client, uid):
+    with pytest.raises(ConfigurationError, match="cannot create tenant"):
+        rgw_user.create_user(client, uid, "Alice")
+    client.request.assert_not_called()
+
+
 def test_create_user_rejects_non_boolean_secret_opt_in_before_request(client):
     with pytest.raises(ConfigurationError):
         rgw_user.create_user(client, "alice", "Alice", include_secrets="true")

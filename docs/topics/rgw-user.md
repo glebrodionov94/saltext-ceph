@@ -20,6 +20,13 @@ complete list. It does not expose pagination controls. Current Ceph adds
 Reef. Current Ceph also adds `account_id`, `account_root_user`, and structured
 `account_policies` to create/update. These values are sent only when requested.
 
+Tenant-qualified users are identified as `tenant$user` (the state also accepts
+`tenant/user` as an input alias). The public Dashboard user-create endpoint has
+no `tenant` parameter, including in Ceph 20.2.4. `create_user` and
+`ceph_rgw_user.present` reject creation of a missing tenant user before sending
+a write. Existing tenant users can still be listed, read, updated, and removed
+through their full identity.
+
 ```bash
 salt-call --local ceph_rgw_user.list_users
 salt-call --local ceph_rgw_user.get_user tenant\$alice
@@ -49,6 +56,10 @@ requires `confirm_policy_detach=true`.
 Quota values accept signed integers because RGW uses negative values to disable
 an individual limit. Rate limits accept non-negative values, with zero carrying
 the RGW disable/unlimited semantics.
+
+For subuser drift, the state sends the full `uid:subuser` identity required by
+the Dashboard update/delete branches. Reconciliation never generates a new
+secret for an existing subuser.
 
 The implementation follows the [current controller](https://github.com/ceph/ceph/blob/main/src/pybind/mgr/dashboard/controllers/rgw.py),
 the [Reef controller](https://github.com/ceph/ceph/blob/reef/src/pybind/mgr/dashboard/controllers/rgw.py),
