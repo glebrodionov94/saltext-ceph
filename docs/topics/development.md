@@ -47,22 +47,21 @@ The unit suite covers package installation, connection profiles, HTTP protocol
 behavior, and actual Salt utility/SSH loaders. Loopback HTTP tests verify Requests
 serialization and session behavior without a cluster. The functional and
 integration directories retain upstream fixtures; they do not start daemons
-unless a test requests them. The live Dashboard smoke tests are read-only and
-skip unless `CEPH_TEST_URL` is set. Configure either `CEPH_TEST_TOKEN`, or both
-`CEPH_TEST_USERNAME` and `CEPH_TEST_PASSWORD`; set `CEPH_TEST_EXPECTED_FSID` to
-pin the intended test cluster. `CEPH_TEST_VERIFY` accepts `true`, `false`, or a
-CA bundle path. Plain HTTP additionally requires `CEPH_TEST_ALLOW_HTTP=1`.
+unless a test requests them. The live Dashboard suite remains inert unless the
+explicit `--ceph-live` gate is present. Credentials can come from direct
+environment variables or their `_FILE` forms. Mutation and destructive-resource
+gates are cumulative and require an expected cluster FSID.
 
 ```console
 CEPH_TEST_URL=https://ceph-test.example:8443 \
-CEPH_TEST_TOKEN=... \
+CEPH_TEST_TOKEN_FILE=/run/secrets/ceph-dashboard-token \
 CEPH_TEST_EXPECTED_FSID=00000000-0000-0000-0000-000000000000 \
-python -m pytest tests/integration/test_live_dashboard.py -q
+python -m pytest tests/integration -q --ceph-live
 ```
 
-Keep these values outside Git. The smoke tests only read minimal health and the
-cluster FSID. Mutating acceptance tests require a separately isolated cluster
-and are not enabled by these variables.
+Keep these values outside Git and never combine live testing with pytest
+`--showlocals`. See [Live cluster testing](live-testing.md) for feature flags,
+metadata lifecycle tests, destructive allowlists, and the dedicated Nox session.
 
 `SALT_REQUIREMENT` selects a Salt version for Nox. For example, set it to
 `salt==3006.27` and use Python 3.11 to test the older CI target.

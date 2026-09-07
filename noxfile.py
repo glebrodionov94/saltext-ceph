@@ -7,10 +7,16 @@ import sys
 import tempfile
 from importlib import metadata
 from pathlib import Path
+from runpy import run_path
 
 import nox
 from nox.command import CommandFailed
 from nox.virtualenv import VirtualEnv
+
+_LIVE_TEST_POLICY = run_path(str(Path(__file__).resolve().parent / "tools" / "live_test_policy.py"))
+is_unsafe_option = _LIVE_TEST_POLICY["is_unsafe_option"]
+isolated_pytest_environment = _LIVE_TEST_POLICY["isolated_pytest_environment"]
+validate_test_path = _LIVE_TEST_POLICY["validate_test_path"]
 
 # Nox options
 #  Reuse existing virtualenvs
@@ -242,6 +248,56 @@ def tests(session):
                 shutil.move(str(COVERAGE_REPORT_DB), str(ARTIFACTS_DIR / COVERAGE_REPORT_DB.name))
 
 
+@nox.session(python="3")
+def live(session):
+    """Run explicitly enabled tests against a separately configured Ceph cluster."""
+    live_environment = {
+        name: value for name, value in os.environ.items() if name.startswith("CEPH_TEST_")
+    }
+    live_environment.update(
+        {name: value for name, value in session.env.items() if name.startswith("CEPH_TEST_")}
+    )
+    # A ``None`` value masks the outer process environment in Nox. Dependency
+    # installers and build hooks therefore never inherit cluster credentials;
+    # the final pytest process receives them explicitly below.
+    session.env.update(dict.fromkeys(live_environment))
+
+    for arg in session.posargs:
+        if is_unsafe_option(arg):
+            session.error("The live session rejected an unsafe pytest option.")
+    if sys.platform == "win32":
+        # uv hardlinks can fail when either its cache or this environment is on
+        # a cloud-backed Windows volume such as OneDrive.
+        session.env.setdefault("UV_LINK_MODE", "copy")
+    _install_requirements(
+        session,
+        install_coverage_requirements=False,
+        install_source=True,
+    )
+
+    args = ["-ra", "--strict-markers", "--ceph-live"]
+    args.extend(session.posargs)
+    explicit_test_path = False
+    for arg in session.posargs:
+        try:
+            is_test_path = validate_test_path(arg, REPO_ROOT)
+        except ValueError as exc:
+            session.error(str(exc))
+        explicit_test_path = explicit_test_path or is_test_path
+    if not explicit_test_path:
+        args.append("tests/integration")
+    # Keep pytest capture enabled and omit --showlocals: live fixtures hold
+    # authentication material even though their reprs are redacted. The live
+    # suite does not start Salt daemons, so third-party pytest plugin autoloading
+    # is unnecessary and would expand the process surface holding credentials.
+    pytest_environment = isolated_pytest_environment(
+        os.environ,
+        session.env,
+        live_environment,
+    )
+    session.run("pytest", *args, env=pytest_environment)
+
+
 class Tee:
     """
     Python class to mimic linux tee behaviour
@@ -377,6 +433,7 @@ def lint_code(session):
             "src/",
             "tools/check_dist.py",
             "tools/check_secrets.py",
+            "tools/live_test_policy.py",
         ]
     _lint(session, ".pylintrc", flags, paths)
 
@@ -411,6 +468,7 @@ def lint_code_pre_commit(session):
             "src/",
             "tools/check_dist.py",
             "tools/check_secrets.py",
+            "tools/live_test_policy.py",
         ]
     _lint_pre_commit(session, ".pylintrc", flags, paths)
 

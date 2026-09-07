@@ -26,6 +26,12 @@ reference. It is ignored by Git and excluded from distributions. Controller
 source and controller tests take precedence where generated parameter types are
 incomplete.
 
+The opt-in acceptance suite has also run against Ceph 20.2.4 Tentacle. It
+validated authentication, core and cephadm read paths, Salt execution-module
+loading, and reversible Dashboard role/user states. Reef remains source-checked;
+it has not yet been exercised by this live test environment. See [Live cluster
+testing](live-testing.md) for the exact tiers and recorded cluster limitations.
+
 The package requires Python 3.10 or newer and Salt 3006 or newer. CI tests the
 declared platform combinations in `.github/workflows/test-action.yml`, currently
 including Salt 3006.27 and 3008.2 on Linux, Windows, and macOS. A lower-bound

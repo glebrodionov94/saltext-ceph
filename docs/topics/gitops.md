@@ -18,10 +18,15 @@ ceph:
     default:
       url: https://ceph-test.example:8443
       username: salt-automation
-      password: <resolved outside plain Git>
+      password_file: /run/secrets/ceph-dashboard-password
       verify: /etc/salt/pki/ceph-dashboard-ca.pem
       expected_fsid: 11111111-1111-1111-1111-111111111111
 ```
+
+The Git-managed profile can safely contain the stable secret path. Provision the
+referenced regular, non-symlink file through the host's secret manager with
+permissions limited to the Salt process. Credential rotation replaces the
+cached Dashboard client on the next profile resolution.
 
 `expected_fsid` is checked by the HTTP client before its first mutation. The
 GitOps runner checks the same FSID before compiling a state run, which protects

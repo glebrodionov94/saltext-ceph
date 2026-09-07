@@ -221,3 +221,12 @@ builtins = [
     "__executors__",
     "__events__",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "ceph_live(features=()): opt-in read-only test against a real Ceph Dashboard",
+    "ceph_live_feature(*names): features the live cluster must explicitly declare",
+    "ceph_live_mutate: mutation requiring expected FSID; includes exact cleanup of UUID-named metadata owned by this test",
+    "ceph_live_destructive(*resources): change to existing or physical cluster infrastructure requiring exact FSID confirmation and allowlist membership",
+]

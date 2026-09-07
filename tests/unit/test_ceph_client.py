@@ -150,6 +150,7 @@ def test_auth_check_uses_controller_contract_without_returning_token(client, tra
     assert "token" not in result.data
     assert transport.call_args.args == ("POST", "https://ceph.example/dashboard/api/auth/check")
     assert transport.call_args.kwargs["params"] == {"token": "secret"}
+    assert transport.call_args.kwargs["json"] == {}
     assert transport.call_args.kwargs["headers"]["Authorization"] == "Bearer secret"
 
 
@@ -164,6 +165,7 @@ def test_logout_revokes_token_and_clears_local_identity(transport):
         result = client.logout()
         assert result.data == {"redirect_url": "#/login", "protocol": "local"}
         assert transport.call_args.args == ("POST", "https://ceph.example/api/auth/logout")
+        assert transport.call_args.kwargs["json"] == {}
         assert transport.call_args.kwargs["headers"]["Authorization"] == "Bearer private-jwt"
         assert client._token is None  # pylint: disable=protected-access
         assert client._identity is None  # pylint: disable=protected-access

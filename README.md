@@ -46,7 +46,7 @@ ceph:
     default:
       url: https://ceph.example:8443
       username: salt-automation
-      password: <resolved by secret management>
+      password_file: /run/secrets/ceph-dashboard-password
       verify: /etc/salt/pki/ceph-dashboard-ca.pem
       expected_fsid: 11111111-1111-1111-1111-111111111111
 ```
@@ -99,9 +99,10 @@ point. Python 3.10+ and Salt 3006+ are supported package targets. CI exercises
 Salt 3006 and 3008; live Dashboard smoke tests are opt-in because they require a
 real cluster.
 
-See [installation][installation], [development][development], and
-[release][releasing] for the complete workflows. Security reports belong in a
-private [GitHub Security Advisory][security], not a public issue.
+See [installation][installation], [development][development], [live cluster
+testing][live-testing], and [release][releasing] for the complete workflows.
+Security reports belong in a private [GitHub Security Advisory][security], not a
+public issue.
 
 ## Project layout
 
@@ -131,6 +132,7 @@ structural reference. The project is licensed under Apache-2.0; see
 [gitops]: https://github.com/glebrodionov94/saltext-ceph/blob/main/docs/topics/gitops.md
 [installation]: https://github.com/glebrodionov94/saltext-ceph/blob/main/docs/topics/installation.md
 [license]: https://github.com/glebrodionov94/saltext-ceph/blob/main/LICENSE
+[live-testing]: https://github.com/glebrodionov94/saltext-ceph/blob/main/docs/topics/live-testing.md
 [notice]: https://github.com/glebrodionov94/saltext-ceph/blob/main/NOTICE
 [permissions]: https://github.com/glebrodionov94/saltext-ceph/blob/main/docs/topics/permissions.md
 [releasing]: https://github.com/glebrodionov94/saltext-ceph/blob/main/docs/topics/releasing.md

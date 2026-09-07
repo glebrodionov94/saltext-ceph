@@ -131,7 +131,7 @@ repos:
         name: Lint Source Code
         language: python
         entry: nox -e lint-code-pre-commit --
-        files: ^((setup|noxfile)|src/.*|tools/check_(dist|secrets))\.py$
+        files: ^((setup|noxfile)|src/.*|tools/(check_(dist|secrets)|live_test_policy))\.py$
         require_serial: true
         additional_dependencies:
           - nox==2026.4.10

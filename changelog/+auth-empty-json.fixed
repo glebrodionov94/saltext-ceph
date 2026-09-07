@@ -1,0 +1,2 @@
+Authentication check and logout requests now send an empty JSON object so Ceph
+Tentacle accepts their POST media type.

@@ -21,7 +21,7 @@ ceph:
     default:
       url: https://ceph.example:8443
       username: salt-automation
-      password: <supply-through-your-secret-management-system>
+      password_file: /run/secrets/ceph-dashboard-password
       verify: /etc/salt/pki/ceph-ca.pem
       connect_timeout: 5
       read_timeout: 30
@@ -34,9 +34,16 @@ disables certificate verification. Plain HTTP requires `allow_http: true`.
 Timeouts are positive seconds for connection establishment and socket reads;
 they are not an overall deadline for a Ceph operation.
 
-Alternatively, replace both `username` and `password` with `token`. A configured
-token is used as-is and cannot be refreshed by the client. Using both methods is
-an error. Profile settings reject unknown keys to catch configuration typos.
+`password_file` is read from an absolute regular, non-symlink file each time the
+profile is resolved. A trailing line ending is removed. This lets Git contain the
+stable profile and secret path while a secret manager or host-local Salt state
+owns the file itself. Literal `password` remains available for ephemeral setups.
+
+Alternatively, replace the username/password pair with `token_file` or literal
+`token`. A configured token is used as-is and cannot be refreshed by the client.
+Credential forms are mutually exclusive. Profile settings reject unknown keys to
+catch configuration typos. Rotating a credential file replaces the cached client
+on the next Salt call in a long-lived process.
 
 Keep credential values out of Git and command-line arguments. This extension
 does not fetch secrets from Vault or another secret manager itself. For salt-ssh,
@@ -163,7 +170,9 @@ Protocol references: [Ceph REST API](https://docs.ceph.com/en/reef/mgr/ceph_api/
 and [saltext-vault's client](https://github.com/salt-extensions/saltext-vault/blob/main/src/saltext/vault/utils/vault/client.py)
 and [SSH wrapper](https://github.com/salt-extensions/saltext-vault/blob/main/src/saltext/vault/wrapper/vault.py).
 
-Tests use synthetic responses, actual Salt loaders and a loopback HTTP server.
-They require no Ceph credentials and make no requests to a live cluster. Live
-Dashboard compatibility, real TLS deployment and end-to-end salt-ssh operation
-still need validation against a test cluster.
+The default tests use synthetic responses, actual Salt loaders, and a loopback
+HTTP server. They require no Ceph credentials. The separately gated live suite
+has validated the client, typed adapters, execution-module loading, and
+reversible metadata states against Ceph 20.2.4 Tentacle. Production CA handling,
+end-to-end salt-ssh, master runners, beacons on a real event bus, and destructive
+storage lifecycles still require environment-specific acceptance tests.

@@ -1,5 +1,8 @@
 """Profile validation and cache isolation."""
 
+from dataclasses import asdict
+from dataclasses import replace
+
 import pytest
 
 from saltext.ceph.utils.ceph.config import ConnectionConfig
@@ -61,6 +64,70 @@ def test_expected_fsid_is_normalized():
     assert config.expected_fsid == "f860ca2e-757d-48ce-b74a-87052cad563f"
 
 
+def test_password_file_profile_reads_secret_without_repr(tmp_path):
+    source = tmp_path / "dashboard-password"
+    source.write_text("file-secret\n", encoding="utf-8")
+    opts = {
+        "ceph": {
+            "profiles": {
+                "default": {
+                    "url": "https://ceph.example",
+                    "username": "salt",
+                    "password_file": str(source),
+                }
+            }
+        }
+    }
+    config = load_profile(opts, {})
+    assert config.password == "file-secret"
+    assert "file-secret" not in repr(config)
+    assert str(source) not in repr(config)
+
+
+def test_token_file_profile_reads_secret_without_repr(tmp_path):
+    source = tmp_path / "dashboard-token"
+    source.write_text("header.payload.signature\n", encoding="utf-8")
+    opts = {
+        "ceph": {
+            "profiles": {"default": {"url": "https://ceph.example", "token_file": str(source)}}
+        }
+    }
+    config = load_profile(opts, {})
+    assert config.token == "header.payload.signature"
+    assert "header.payload.signature" not in repr(config)
+
+
+def test_file_backed_profile_produces_a_regular_replaceable_config(tmp_path):
+    source = tmp_path / "dashboard-token"
+    source.write_text("header.payload.signature", encoding="utf-8")
+    opts = {
+        "ceph": {
+            "profiles": {"default": {"url": "https://ceph.example", "token_file": str(source)}}
+        }
+    }
+    config = load_profile(opts, {})
+
+    assert replace(config, read_timeout=10).read_timeout == 10
+    assert ConnectionConfig(**asdict(config)) == config
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"username": "salt", "password": "secret", "password_file": "/secret"},
+        {"token": "secret", "token_file": "/secret"},
+        {"username": "salt", "token_file": "/secret"},
+        {"password_file": "/secret"},
+    ],
+)
+def test_credential_file_modes_are_mutually_exclusive(values):
+    with pytest.raises(ConfigurationError):
+        load_profile(
+            {"ceph": {"profiles": {"default": {"url": "https://ceph.example", **values}}}},
+            {},
+        )
+
+
 def test_pillar_profile_replaces_opts_profile():
     opts = {"ceph": {"profiles": {"default": settings()}}}
     pillar = {
@@ -96,6 +163,26 @@ def test_profile_cache_reuses_rotates_and_closes():
         assert not clear_cache(context)
         assert clear_cache(context, None)
         assert second.closed
+    finally:
+        clear_cache(context, None)
+
+
+def test_profile_cache_rotates_when_secret_file_changes(tmp_path):
+    source = tmp_path / "dashboard-token"
+    source.write_text("first-token", encoding="utf-8")
+    opts = {
+        "ceph": {
+            "profiles": {"default": {"url": "https://ceph.example", "token_file": str(source)}}
+        }
+    }
+    context = {}
+    first = get_client(opts, {}, context)
+    try:
+        source.write_text("second-token", encoding="utf-8")
+        replacement = get_client(opts, {}, context)
+        assert replacement is not first
+        assert first.closed
+        assert replacement.config.token == "second-token"
     finally:
         clear_cache(context, None)
 

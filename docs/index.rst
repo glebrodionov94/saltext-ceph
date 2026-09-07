@@ -62,6 +62,7 @@ orchestrator while Salt calculates and verifies desired state.
   topics/telemetry
   topics/beacons
   topics/development
+  topics/live-testing
   topics/releasing
 
 .. toctree::

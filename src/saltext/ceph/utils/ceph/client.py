@@ -182,7 +182,12 @@ class CephClient:
         if self._token is None:
             self._login()
         response = self._send(
-            "POST", "/api/auth/check", "1.0", params={"token": self._token}, token=self._token
+            "POST",
+            "/api/auth/check",
+            "1.0",
+            params={"token": self._token},
+            data={},
+            token=self._token,
         )
         try:
             result = self._decode(response, "POST")
@@ -200,7 +205,7 @@ class CephClient:
             self._login()
         response = None
         try:
-            response = self._send("POST", "/api/auth/logout", "1.0", token=self._token)
+            response = self._send("POST", "/api/auth/logout", "1.0", data={}, token=self._token)
             return self._decode(response, "POST")
         finally:
             self._token = None

@@ -10,6 +10,7 @@ from dataclasses import fields
 from urllib.parse import unquote
 from urllib.parse import urlsplit
 
+from saltext.ceph.utils.ceph import secret_file
 from saltext.ceph.utils.ceph.errors import ConfigurationError
 
 
@@ -79,7 +80,7 @@ class ConnectionConfig:
                 raise ConfigurationError(f"{name} must be a non-empty string.")
         if self.token is not None:
             if self.username is not None or self.password is not None:
-                raise ConfigurationError("Use token OR username/password, not both.")
+                raise ConfigurationError("Use token authentication OR username/password, not both.")
             if re.search(r"\s|[^\x21-\x7e]", self.token):
                 raise ConfigurationError("token contains invalid header characters.")
         elif self.username is None or self.password is None:
@@ -108,6 +109,41 @@ class ConnectionConfig:
         object.__setattr__(self, "url", self.url.rstrip("/"))
 
 
+def _resolved_profile(settings):
+    """Resolve one profile's mutually exclusive credential-file inputs."""
+    resolved = dict(settings)
+    password_file = resolved.pop("password_file", None)
+    token_file = resolved.pop("token_file", None)
+    for name, value in (("password_file", password_file), ("token_file", token_file)):
+        if value is not None and (not isinstance(value, str) or not value):
+            raise ConfigurationError(f"{name} must be a non-empty string.")
+    if password_file is not None and resolved.get("password") is not None:
+        raise ConfigurationError("Use password OR password_file, not both.")
+    if token_file is not None and resolved.get("token") is not None:
+        raise ConfigurationError("Use token OR token_file, not both.")
+    if token_file is not None and any(
+        resolved.get(name) is not None for name in ("username", "password")
+    ):
+        raise ConfigurationError("Use token authentication OR username/password, not both.")
+    if password_file is not None and (
+        resolved.get("username") is None
+        or token_file is not None
+        or resolved.get("token") is not None
+    ):
+        raise ConfigurationError("Use token authentication OR username/password, not both.")
+    if password_file is not None:
+        password = secret_file.read(password_file).rstrip("\r\n")
+        if not password:
+            raise ConfigurationError("password_file contains no usable password.")
+        resolved["password"] = password
+    if token_file is not None:
+        token = secret_file.read(token_file).rstrip("\r\n")
+        if not token:
+            raise ConfigurationError("token_file contains no usable token.")
+        resolved["token"] = token
+    return resolved
+
+
 def load_profile(opts, pillar, profile="default"):
     """Read ``ceph:profiles:<profile>``; a pillar profile replaces an opts profile.
 
@@ -127,9 +163,13 @@ def load_profile(opts, pillar, profile="default"):
             settings = profiles[profile]
             if not isinstance(settings, Mapping):
                 raise ConfigurationError("Ceph profile must be a mapping.")
-            if set(settings) - {item.name for item in fields(ConnectionConfig)}:
+            supported = {item.name for item in fields(ConnectionConfig)} | {
+                "password_file",
+                "token_file",
+            }
+            if set(settings) - supported:
                 raise ConfigurationError("Ceph profile contains unsupported settings.")
             if "url" not in settings:
                 raise ConfigurationError("Ceph profile requires url.")
-            return ConnectionConfig(**settings)
+            return ConnectionConfig(**_resolved_profile(settings))
     raise ConfigurationError("Requested Ceph profile is not configured.")

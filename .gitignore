@@ -138,3 +138,9 @@ src/saltext/ceph/version.py
 
 # Ignore CI generated artifacts
 artifacts/
+
+# Local live-cluster configuration and credential material
+tests/integration/live.env
+tests/integration/live.env.*
+!tests/integration/live.env.example
+tests/integration/.live-secrets/
