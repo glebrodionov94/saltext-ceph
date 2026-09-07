@@ -83,8 +83,8 @@ dev = [
 # `--extras` to install them automatically.
 dev_extra = [
     "black==26.5.1",
-    "isort==8.0.1",
-    "coverage==7.14.3",
+    "isort==9.0.1",
+    "coverage==7.16.0",
 ]
 docs = [
   "sphinx",
@@ -99,7 +99,7 @@ docs = [
 ]
 docsauto = ["sphinx-autobuild"]
 lint = [
-    "pylint==4.0.6",
+    "pylint==4.0.8",
 ]
 tests = [
     "pytest>=7.2.0",
