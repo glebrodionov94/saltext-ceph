@@ -1,0 +1,1 @@
+Add guarded RGW realm, zonegroup, zone, storage-class, and sync-policy operations with file-sourced credentials.

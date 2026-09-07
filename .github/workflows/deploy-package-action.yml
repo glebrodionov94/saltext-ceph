@@ -1,0 +1,219 @@
+---
+name: Release Salt Extension Python Package
+
+on:  # zizmor: ignore[dangerous-triggers] restricted to validated same-repository release runs
+  workflow_run:
+    types:
+      - completed
+    workflows:
+      - Auto PR Releases
+      - Tagged Releases
+
+permissions: {}
+
+concurrency:
+  group: saltext-ceph-package-release
+  cancel-in-progress: false
+
+jobs:
+  get_version:
+    name: Get package version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Enable only when the project is ready for its first public release.
+    if: >-
+      vars.CEPH_RELEASES_ENABLED == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (
+        (github.event.workflow_run.name == 'Tagged Releases' &&
+         github.event.workflow_run.event == 'push') ||
+        (github.event.workflow_run.name == 'Auto PR Releases' &&
+         github.event.workflow_run.event == 'pull_request')
+      )
+    permissions:
+      actions: read
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+
+    steps:
+      - name: Download expected version
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: version.txt
+          path: ${{ runner.temp }}
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download Python Package Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: salt-extension-packages
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Extract and verify package version
+        id: extract-version
+        env:
+          DIST_DIR: ${{ github.workspace }}/dist
+          EXPECTED_VERSION_FILE: ${{ runner.temp }}/version.txt
+        run: |
+          python - <<'PY'
+          import email.policy
+          import os
+          import re
+          import tarfile
+          import zipfile
+          from email.parser import BytesParser
+          from pathlib import Path
+
+          dist_dir = Path(os.environ["DIST_DIR"])
+          wheels = list(dist_dir.glob("*.whl"))
+          sdists = list(dist_dir.glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise SystemExit(
+                  f"Expected one wheel and one sdist, found {len(wheels)} and {len(sdists)}"
+              )
+
+          expected = Path(os.environ["EXPECTED_VERSION_FILE"]).read_text(
+              encoding="utf-8"
+          ).strip()
+          stable_version = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+          if re.fullmatch(stable_version, expected) is None:
+              raise SystemExit(f"Release version is not MAJOR.MINOR.PATCH: {expected!r}")
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              metadata_paths = [
+                  name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+              ]
+              if len(metadata_paths) != 1:
+                  raise SystemExit("Wheel must contain exactly one METADATA file")
+              wheel_metadata = BytesParser(policy=email.policy.default).parsebytes(
+                  archive.read(metadata_paths[0])
+              )
+
+          with tarfile.open(sdists[0], "r:gz") as archive:
+              metadata_members = [
+                  member
+                  for member in archive.getmembers()
+                  if member.isfile() and member.name.count("/") == 1
+                  and member.name.endswith("/PKG-INFO")
+              ]
+              if len(metadata_members) != 1:
+                  raise SystemExit("Sdist must contain exactly one top-level PKG-INFO file")
+              metadata_file = archive.extractfile(metadata_members[0])
+              if metadata_file is None:
+                  raise SystemExit("Could not read sdist PKG-INFO")
+              sdist_metadata = BytesParser(policy=email.policy.default).parse(metadata_file)
+
+          for archive_name, metadata in (
+              ("wheel", wheel_metadata),
+              ("sdist", sdist_metadata),
+          ):
+              normalized_name = re.sub(r"[-_.]+", "-", metadata.get("Name", "")).lower()
+              if normalized_name != "saltext-ceph":
+                  raise SystemExit(f"Unexpected {archive_name} project name: {normalized_name!r}")
+              if metadata.get("Version") != expected:
+                  raise SystemExit(
+                      f"Expected {archive_name} version {expected!r}, "
+                      f"found {metadata.get('Version')!r}"
+                  )
+
+          print(f"Verified saltext.ceph {expected} release artifacts")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"version={expected}\n")
+          PY
+
+  test_release:
+    name: Publish Python Package to Test PyPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      - get_version
+    permissions:
+      actions: read
+      id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/saltext.ceph
+
+    steps:
+      - name: Download Python Package Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: salt-extension-packages
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Publish distribution to Test PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          attestations: true
+          repository-url: https://test.pypi.org/legacy/
+          verbose: ${{ runner.debug == '1' }}
+
+  pypi_release:
+    name: Publish Python Package to PyPI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      - test_release
+    permissions:
+      actions: read
+      id-token: write
+    environment:
+      name: release
+      url: https://pypi.org/p/saltext.ceph
+
+    steps:
+      - name: Download Python Package Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: salt-extension-packages
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # v1.13.0
+        with:
+          attestations: true
+          verbose: ${{ runner.debug == '1' }}
+
+  gh_release:
+    name: Create GitHub release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs:
+      - pypi_release
+      - get_version
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download Python Package Artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: salt-extension-packages
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: sha256sum --binary ./* > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.get_version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+              --repo="$GITHUB_REPOSITORY" \
+              --title="${GITHUB_REPOSITORY#*/} $VERSION" \
+              --verify-tag \
+              --generate-notes \
+              dist/*

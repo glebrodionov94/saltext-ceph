@@ -1,0 +1,14 @@
+# Require an explicit maintainer review for package identity and release automation.
+/pyproject.toml @glebrodionov94
+/setup.py @glebrodionov94
+/MANIFEST.in @glebrodionov94
+/.github/actions/ @glebrodionov94
+/.github/workflows/ @glebrodionov94
+/.github/dependabot.yml @glebrodionov94
+/.pre-commit-config.yaml @glebrodionov94
+/.github/CODEOWNERS @glebrodionov94
+/SECURITY.md @glebrodionov94
+/tools/ @glebrodionov94
+/src/saltext/ceph/runners/ceph_gitops.py @glebrodionov94
+/src/saltext/ceph/utils/ceph/client.py @glebrodionov94
+/src/saltext/ceph/utils/ceph/config.py @glebrodionov94

@@ -1,0 +1,223 @@
+[build-system]
+requires = [
+    "wheel",
+    "setuptools>=77",
+    "setuptools_scm[toml]>=8",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "src/saltext/ceph/version.py"
+write_to_template = "__version__ = \"{version}\"\n"
+fallback_version = "0.1.0.dev0"
+
+[project]
+name = "saltext.ceph"
+description = "Salt Extension for interacting with Ceph through the Dashboard REST API"
+authors = [
+    {name = "glebrodionov94", email = "glebrodionov94@users.noreply.github.com"},
+]
+maintainers = [
+    {name = "glebrodionov94", email = "glebrodionov94@users.noreply.github.com"},
+]
+keywords = [
+    "ceph",
+    "cephadm",
+    "configuration-management",
+    "infrastructure-as-code",
+    "salt",
+    "salt-extension",
+    "saltstack",
+]
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: System :: Systems Administration",
+]
+requires-python = ">= 3.10"
+dynamic = ["version"]
+dependencies = [
+    "salt>=3006",
+    "requests>=2.32.4,<3",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.urls]
+Homepage = "https://github.com/glebrodionov94/saltext-ceph"
+Source = "https://github.com/glebrodionov94/saltext-ceph"
+Tracker = "https://github.com/glebrodionov94/saltext-ceph/issues"
+Changelog = "https://github.com/glebrodionov94/saltext-ceph/blob/main/CHANGELOG.md"
+Security = "https://github.com/glebrodionov94/saltext-ceph/security/policy"
+
+[project.optional-dependencies]
+build = [
+    "build>=1.2",
+    "check-wheel-contents>=0.6",
+]
+# Run Twine from the isolated release tool set. Salt 3006 pins packaging 24.0,
+# while validating the PEP 639 metadata emitted here needs packaging 24.2+.
+changelog = ["towncrier==25.8.0"]
+dev = [
+    "nox[uv]>=2024.3,!=2025.05.01",
+    "pre-commit>=2.21.0",
+]
+# These dependencies are used in automations. It can be helpful
+# to have them installed in the dev venv, e.g. for editor integration.
+# When initializing the dev env using the included automation, pass
+# `--extras` to install them automatically.
+dev_extra = [
+    "black==26.5.1",
+    "isort==8.0.1",
+    "coverage==7.14.3",
+]
+docs = [
+  "sphinx",
+  "sphinx-prompt",
+  "sphinxcontrib-spelling",
+  "sphinx-copybutton",
+  "towncrier==25.8.0",
+  "sphinxcontrib-towncrier",
+  "myst_parser",
+  "furo",
+  "sphinx-inline-tabs",
+]
+docsauto = ["sphinx-autobuild"]
+lint = [
+    "pylint==4.0.6",
+]
+tests = [
+    "pytest>=7.2.0",
+    "pytest-salt-factories>=1.0.0",
+    "pytest-instafail",
+    "tomli>=1.1.0; python_version < '3.11'",
+]
+
+[project.entry-points."salt.loader"]
+"saltext.ceph" = "saltext.ceph"
+
+[tool.uv.extra-build-dependencies]
+# Salt's legacy setup.py requires old setuptools. Scope the compatibility pin
+# to Salt so this project can use a current setuptools for PEP 639 metadata.
+salt = ["setuptools<69"]
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+platforms = ["any"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests"]
+
+[tool.distutils.bdist_wheel]
+# Use this option if your package is pure-python
+universal = 0
+
+[tool.distutils.sdist]
+owner = "root"
+group = "root"
+
+[tool.build_sphinx]
+source_dir = "docs"
+build_dir = "build/sphinx"
+
+[tool.black]
+line-length = 100
+# Keep formatting and Black's safe grammar checks tied to the declared lower
+# Python bound instead of every Python version known to the installed Black.
+target-version = ["py310"]
+
+[tool.isort]
+force_single_line = true
+skip = ["src/saltext/ceph/__init__.py"]
+profile = "black"
+line_length = 100
+
+[tool.towncrier]
+package = "saltext.ceph"
+filename = "CHANGELOG.md"
+template = "changelog/.template.jinja"
+directory = "changelog/"
+start_string = "# Changelog\n"
+underlines = ["", "", ""]
+title_format = "## {version} ({project_date})"
+issue_format = "[#{issue}](https://github.com/glebrodionov94/saltext-ceph/issues/{issue})"
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Breaking changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "deprecated"
+name = "Deprecated"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true
+
+# While we currently don't use ruff for linting, it's helpful to include
+# these settings in case a user has setup ruff in their editor environment.
+[tool.ruff]
+builtins = [
+    "__opts__",
+    "__salt__",
+    "__pillar__",
+    "__grains__",
+    "__context__",
+    "__runner__",
+    "__ret__",
+    "__env__",
+    "__low__",
+    "__states__",
+    "__lowstate__",
+    "__running__",
+    "__active_provider_name__",
+    "__master_opts__",
+    "__jid_event__",
+    "__instance_id__",
+    "__salt_system_encoding__",
+    "__proxy__",
+    "__serializers__",
+    "__reg__",
+    "__executors__",
+    "__events__",
+]

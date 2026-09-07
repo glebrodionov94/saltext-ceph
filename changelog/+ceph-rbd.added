@@ -1,0 +1,3 @@
+Add RBD image, namespace, snapshot, trash, copy, clone, configuration, metadata,
+and mirroring-schedule execution and salt-ssh operations with API v2 pagination
+and confirmation guards for destructive changes.

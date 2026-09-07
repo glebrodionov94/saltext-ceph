@@ -1,0 +1,2 @@
+Add ``ceph_auth`` execution and salt-ssh wrapper modules for safe Dashboard
+login, token validation and logout without returning JWTs.

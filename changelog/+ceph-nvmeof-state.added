@@ -1,0 +1,4 @@
+Add current-only declarative NVMe-oF gateway configuration, subsystem, listener,
+host, and namespace states with exact GET projections, asynchronous task waits,
+post-mutation verification, secret-source handling, test mode, and explicit
+destructive confirmation guards.

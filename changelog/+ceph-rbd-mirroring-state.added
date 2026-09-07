@@ -1,0 +1,2 @@
+Add declarative RBD mirroring site, pool-mode, and legacy-peer states with
+create-only file-sourced peer keys and secret-free state changes.

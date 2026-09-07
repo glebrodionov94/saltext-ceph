@@ -1,0 +1,4 @@
+Add all 48 current public Ceph Dashboard NVMe-oF gateway, SPDK, subsystem,
+listener, namespace, host, and connection endpoints with salt-ssh parity,
+file-only authentication secrets, response redaction, validation, and explicit
+confirmation guards for destructive or disruptive operations.

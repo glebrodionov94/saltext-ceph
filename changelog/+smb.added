@@ -1,0 +1,1 @@
+Added current-Ceph SMB cluster, share, join-auth, users/groups, and share QoS operations with file-based secrets and redacted returns.

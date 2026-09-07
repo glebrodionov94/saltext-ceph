@@ -1,0 +1,47 @@
+---
+on:
+  workflow_call:
+    outputs:
+      changed-files:
+        description: "Changed file JSON output from dorny/paths-filter"
+        value: ${{ jobs.get-changed-files.outputs.changed-files }}
+
+permissions:
+  contents: read  # for dorny/paths-filter to fetch a list of changed files
+  pull-requests: read  # for dorny/paths-filter to read pull requests
+
+jobs:
+  get-changed-files:
+    name: Get Changed Files
+    runs-on: ubuntu-24.04
+    outputs:
+      changed-files: ${{ toJSON(steps.changed-files.outputs) }}
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Get Changed Files
+        id: changed-files
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
+        with:
+          token: ${{ github.token }}
+          list-files: json
+          filters: |-
+            repo:
+              - added|modified:
+                - '**'
+            deleted:
+              - deleted:
+                - '**'
+            pre-commit:
+              - added|modified|deleted:
+                - .pre-commit-hooks/**
+                - .pre-commit-config.y?(a)ml
+                - .pylintrc
+                - pyproject.toml
+      - name: Echo Changed Files Output
+        env:
+          CHANGED_FILES: ${{ toJSON(steps.changed-files.outputs) }}
+        run: printf '%s\n' "$CHANGED_FILES"

@@ -1,0 +1,1 @@
+Added cluster status and cephadm upgrade execution modules with salt-ssh support.

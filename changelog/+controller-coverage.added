@@ -1,0 +1,2 @@
+Document the mapping from Ceph Dashboard public controller sources to Salt
+execution modules, including reviewed exclusions and compatibility boundaries.

@@ -1,0 +1,2 @@
+Add public iSCSI discovery authentication and guarded structured target management through Dashboard API version 1.0.
+CHAP secrets are recursively redacted from API returns by default.

@@ -1,0 +1,2 @@
+Document that package builds and metadata checks must use the isolated, pinned
+release tool set instead of the Salt runtime environment.

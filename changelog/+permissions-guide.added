@@ -1,0 +1,2 @@
+Document least-privilege Ceph Dashboard scopes for each Salt resource family and
+the CLI bootstrap flow for a dedicated automation identity.

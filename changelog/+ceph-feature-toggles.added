@@ -1,0 +1,2 @@
+Add read-only inspection of the public Dashboard feature-toggle endpoint that is
+registered by the Ceph manager plugin outside the main controller directory.

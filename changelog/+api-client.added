@@ -1,0 +1,3 @@
+Add a shared Ceph Dashboard HTTP client with validated connection profiles, JWT
+authentication, in-memory sessions and explicit per-operation API versions.
+Add salt-ssh query and local cache management wrappers, protocol tests and usage documentation.

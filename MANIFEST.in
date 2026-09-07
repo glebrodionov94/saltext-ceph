@@ -1,0 +1,15 @@
+include LICENSE NOTICE README.md CHANGELOG.md CONTRIBUTING.md CODE-OF-CONDUCT.md SECURITY.md
+include pyproject.toml setup.py noxfile.py Makefile
+include .copier-answers.yml .coveragerc .pre-commit-config.yaml .pylintrc
+recursive-include src *.py
+recursive-include tests *.py
+recursive-include docs *.py *.rst *.md Makefile make.bat .gitkeep
+graft changelog
+recursive-include tools *.py *.txt
+recursive-include .pre-commit-hooks *.py
+exclude openapi.json .env .env.* .netrc .pypirc
+prune artifacts
+prune build
+prune dist
+prune docs/_build
+global-exclude __pycache__ *.py[cod] *.pem *.key *.p12 *.pfx *.jks

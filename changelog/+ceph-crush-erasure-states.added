@@ -1,0 +1,1 @@
+Add immutable-aware presence, explicit replacement, and guarded deletion states for CRUSH rules and erasure-code profiles.

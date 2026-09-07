@@ -1,0 +1,3 @@
+Hardened the release pipeline around tokenless PyPI Trusted Publishing, protected
+GitHub environments, package archive validation, and least-privilege workflow
+permissions.

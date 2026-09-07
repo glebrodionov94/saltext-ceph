@@ -1,0 +1,7 @@
+# Direct release tooling is pinned so the artifact-producing job changes only
+# through a reviewed dependency update. Transitive dependencies are resolved in
+# the short-lived GitHub Actions environment.
+build==1.6.0
+check-wheel-contents==0.6.3
+packaging==26.3
+twine==7.0.0

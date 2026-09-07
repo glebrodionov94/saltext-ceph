@@ -1,0 +1,2 @@
+Add type-exact Dashboard setting management and confirmed reset states that fail
+safely when redaction prevents a truthful drift comparison.

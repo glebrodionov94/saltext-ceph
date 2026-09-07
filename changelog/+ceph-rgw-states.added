@@ -1,0 +1,1 @@
+Add declarative RGW user, bucket, multisite, topic, account, role, quota, rate-limit, placement, and sync-policy states with test mode, task waiting, post-read verification, destructive guards, and a secret-safe changes boundary.

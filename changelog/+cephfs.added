@@ -1,0 +1,3 @@
+Add the ``cephfs`` execution and salt-ssh wrapper modules for filesystems,
+clients, namespace operations, subvolumes, groups, snapshots, schedules, and
+current-release snapshot mirroring.

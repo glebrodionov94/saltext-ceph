@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Salt Community Slack
+    url: https://saltstackcommunity.slack.com/
+    about: Please ask and answer questions here.
+  - name: Salt-Users Forum
+    url: https://groups.google.com/forum/#!forum/salt-users
+    about: Please ask and answer questions here.
+  - name: Salt on LiberaChat
+    url: https://web.libera.chat/#salt
+    about: Please ask and answer questions here.
+  - name: Security vulnerabilities
+    url: https://github.com/glebrodionov94/saltext-ceph/security/advisories/new
+    about: Report vulnerabilities privately through a GitHub Security Advisory.
