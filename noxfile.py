@@ -524,7 +524,6 @@ def docs(session):
     os.chdir("docs/")
     env = _get_docs_env(session)
     session.run("make", "clean", external=True)
-    session.run("make", "linkcheck", "SPHINXOPTS=-W", external=True, env=env)
     session.run("make", "coverage", "SPHINXOPTS=-W", external=True, env=env)
     session.run(
         "python",

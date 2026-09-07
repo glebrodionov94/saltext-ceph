@@ -25,6 +25,9 @@ This project uses [Semantic Versioning](https://semver.org/) - MAJOR.MINOR.PATCH
 
 ### Fixed
 
+- Keep release documentation builds independent of third-party link rate limits;
+  Sphinx coverage and warning-free HTML remain required release checks.
+
 - Accept the Dashboard ``Off`` versioning status for newly created RGW buckets so dry-runs and convergence can enable versioning across Reef and newer Ceph releases.
 - Authentication check and logout requests now send an empty JSON object so Ceph
   Tentacle accepts their POST media type.
