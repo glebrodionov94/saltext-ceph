@@ -159,6 +159,34 @@ def _comparable_desired(desired):
     return result
 
 
+def _update(name, current, desired, comparable, profile):
+    """Return the mutation that reconciles mutable fields from one fresh read."""
+    current_view = _view(current, desired)
+    update_options = {
+        key: value for key, value in desired["options"].items() if current.get(key) != value
+    }
+    if current.get("pg_num") != desired["pg_num"]:
+        update_options["pg_num"] = desired["pg_num"]
+    return __salt__["ceph_pool.update"](
+        name,
+        flags=(
+            desired.get("flags") if current_view.get("flags") != comparable.get("flags") else None
+        ),
+        application_metadata=(
+            desired.get("application_metadata")
+            if current_view.get("application_metadata") != comparable.get("application_metadata")
+            else None
+        ),
+        rbd_configuration=(
+            desired.get("rbd_configuration")
+            if current_view.get("rbd_configuration") != comparable.get("rbd_configuration")
+            else None
+        ),
+        options=update_options or None,
+        profile=profile,
+    )
+
+
 def present(
     name,
     pg_num,
@@ -214,7 +242,8 @@ def present(
         if __opts__.get("test", False):
             return reconcile.planned(ret, old, comparable, f"Ceph pool {name} would be reconciled.")
 
-        if current is None:
+        created = current is None
+        if created:
             response = __salt__["ceph_pool.create"](
                 name,
                 pg_num,
@@ -229,27 +258,7 @@ def present(
                 profile=profile,
             )
         else:
-            update_options = {
-                key: value for key, value in desired["options"].items() if current.get(key) != value
-            }
-            if current.get("pg_num") != pg_num:
-                update_options["pg_num"] = pg_num
-            response = __salt__["ceph_pool.update"](
-                name,
-                flags=flags if old.get("flags") != comparable.get("flags") else None,
-                application_metadata=(
-                    application_metadata
-                    if old.get("application_metadata") != comparable.get("application_metadata")
-                    else None
-                ),
-                rbd_configuration=(
-                    rbd_configuration
-                    if old.get("rbd_configuration") != comparable.get("rbd_configuration")
-                    else None
-                ),
-                options=update_options or None,
-                profile=profile,
-            )
+            response = _update(name, current, desired, comparable, profile)
         reconcile.wait_if_accepted(
             __salt__,
             response,
@@ -257,9 +266,49 @@ def present(
             timeout=task_timeout,
             interval=task_interval,
         )
-        after = _view(_current(name, profile), desired)
-        if after != comparable:
-            raise ProtocolError(f"Ceph pool {name} did not converge after mutation.")
+        if created:
+            current = reconcile.wait_for_convergence(
+                lambda: _current(name, profile),
+                lambda observed: observed is not None,
+                timeout=task_timeout,
+                interval=task_interval,
+                timeout_message=f"Ceph pool {name} did not converge after mutation.",
+            )
+            created_view = _view(current, desired)
+            if created_view == comparable:
+                return reconcile.changed(
+                    ret,
+                    old,
+                    created_view,
+                    f"Ceph pool {name} was reconciled.",
+                )
+            immutable = {
+                key
+                for key in ("pool_type", "erasure_code_profile", "rule_name")
+                if key in comparable and created_view.get(key) != comparable.get(key)
+            }
+            if immutable:
+                raise ProtocolError(
+                    "Created pool has incompatible immutable fields: "
+                    + ", ".join(sorted(immutable))
+                    + "."
+                )
+            response = _update(name, current, desired, comparable, profile)
+            reconcile.wait_if_accepted(
+                __salt__,
+                response,
+                profile=profile,
+                timeout=task_timeout,
+                interval=task_interval,
+            )
+        after_resource = reconcile.wait_for_convergence(
+            lambda: _current(name, profile),
+            lambda observed: observed is not None and _view(observed, desired) == comparable,
+            timeout=task_timeout,
+            interval=task_interval,
+            timeout_message=f"Ceph pool {name} did not converge after mutation.",
+        )
+        after = _view(after_resource, desired)
         return reconcile.changed(ret, old, after, f"Ceph pool {name} was reconciled.")
     except _ERRORS as exc:
         return reconcile.failed(ret, exc)
@@ -293,8 +342,13 @@ def absent(
             timeout=task_timeout,
             interval=task_interval,
         )
-        if _current(name, profile) is not None:
-            raise ProtocolError(f"Ceph pool {name} still exists after deletion.")
+        reconcile.wait_for_convergence(
+            lambda: _current(name, profile),
+            lambda observed: observed is None,
+            timeout=task_timeout,
+            interval=task_interval,
+            timeout_message=f"Ceph pool {name} still exists after deletion.",
+        )
         return reconcile.changed(ret, current, None, f"Ceph pool {name} was deleted.")
     except _ERRORS as exc:
         return reconcile.failed(ret, exc)

@@ -17,12 +17,14 @@ _SETTING_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
 def _name(value):
+    """Validate and return an erasure-code profile name."""
     if not isinstance(value, str) or not _NAME_PATTERN.fullmatch(value):
         raise ConfigurationError("name contains unsupported characters.")
     return value
 
 
 def _settings(values):
+    """Validate and normalize erasure-code profile settings."""
     if values is None:
         return {}
     if not isinstance(values, Mapping):

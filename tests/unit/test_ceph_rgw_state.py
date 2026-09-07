@@ -47,6 +47,26 @@ def test_response_bool_rejects_float_lookalike():
         rgw_state.response_bool(1.0, "enabled")
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    (
+        ("Enabled", "Enabled"),
+        (" suspended ", "Suspended"),
+        ("OFF", "Off"),
+        ({"Status": "Off"}, "Off"),
+        ({"status": "enabled"}, "Enabled"),
+    ),
+)
+def test_versioning_status_normalizes_supported_dashboard_shapes(value, expected):
+    assert rgw_state.versioning_status(value) == expected
+
+
+@pytest.mark.parametrize("value", (None, "", "Disabled", {}, {"Status": None}, []))
+def test_versioning_status_rejects_unknown_or_missing_values(value):
+    with pytest.raises(ProtocolError, match="usable versioning status"):
+        rgw_state.versioning_status(value)
+
+
 def test_rate_view_accepts_nested_radosgw_admin_shape():
     value = {
         "user_ratelimit": {

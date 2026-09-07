@@ -25,6 +25,7 @@ _DEVICE_CLASS_PATTERN = re.compile(r"[A-Za-z0-9_.-]*")
 
 
 def _osd_id(value):
+    """Validate and normalize a non-negative OSD identifier."""
     return validation.non_negative_integer(value, "svc_id")
 
 
@@ -59,6 +60,7 @@ def _string_list_response(response, label):
 
 
 def _flags(values):
+    """Validate and normalize cluster-wide OSD flags."""
     return validation.string_list(values, "flags", pattern=_FLAG_PATTERN, optional=False)
 
 

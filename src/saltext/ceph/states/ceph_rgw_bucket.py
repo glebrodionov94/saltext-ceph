@@ -276,9 +276,7 @@ def versioning_present(
         current = _bucket(name, daemon_name, profile)
         if current is None:
             raise ConfigurationError(f"RGW bucket {name} must exist before versioning is managed.")
-        old = current.get("versioning")
-        if old not in ("Enabled", "Suspended"):
-            raise ProtocolError("RGW bucket read omitted a usable versioning status.")
+        old = rgw_state.versioning_status(current.get("versioning"))
         if old == versioning_state:
             return reconcile.no_change(ret, f"RGW bucket {name} versioning is current.")
         if __opts__.get("test", False):
@@ -299,7 +297,11 @@ def versioning_present(
         )
         _wait(response, profile, task_timeout, task_interval)
         after_resource = _bucket(name, daemon_name, profile)
-        after = None if after_resource is None else after_resource.get("versioning")
+        after = (
+            None
+            if after_resource is None
+            else rgw_state.versioning_status(after_resource.get("versioning"))
+        )
         if after != versioning_state:
             raise ProtocolError(f"RGW bucket {name} versioning did not converge.")
         return reconcile.changed(ret, old, after, f"RGW bucket {name} versioning was reconciled.")

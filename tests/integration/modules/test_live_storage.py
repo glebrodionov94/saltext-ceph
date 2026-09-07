@@ -10,7 +10,6 @@ from saltext.ceph.utils.ceph import erasure_code_profile
 from saltext.ceph.utils.ceph import osd
 from saltext.ceph.utils.ceph import pool
 from saltext.ceph.utils.ceph import rbd
-from saltext.ceph.utils.ceph.errors import APIError
 
 from ._live import load_execution_modules
 from ._live import mapping_items
@@ -32,7 +31,9 @@ def live_pools(live_client):
 @pytest.fixture
 def live_up_osd_id(live_osds):
     for item in live_osds:
-        if item.get("up") not in (True, 1):
+        states = item.get("state")
+        state_is_up = isinstance(states, list) and "up" in states
+        if item.get("up") not in (True, 1) and not state_is_up:
             continue
         svc_id = item.get("id")
         if isinstance(svc_id, bool) or not isinstance(svc_id, int):
@@ -53,26 +54,14 @@ def test_live_osd_collection_and_read_only_settings(live_client, live_osds):
     assert all(isinstance(item, Mapping) for item in individual_flags)
 
 
-def test_live_first_osd_detail_contracts(live_client, live_osds):
-    if not live_osds:
-        pytest.skip("the cluster has no OSDs")
-    svc_id = live_osds[0].get("id")
-    if isinstance(svc_id, bool) or not isinstance(svc_id, int):
-        pytest.fail("the OSD list returned an invalid numeric id")
-
-    response_data(osd.get(live_client, svc_id), Mapping)
-    mapping_items(osd.devices(live_client, svc_id))
+def test_live_up_osd_detail_contracts(live_client, live_up_osd_id):
+    response_data(osd.get(live_client, live_up_osd_id), Mapping)
+    mapping_items(osd.devices(live_client, live_up_osd_id))
 
 
 @pytest.mark.parametrize("operation", (osd.smart, osd.histogram), ids=("smart", "histogram"))
-def test_live_optional_osd_telemetry(live_client, live_up_osd_id, operation):
-    try:
-        response = operation(live_client, live_up_osd_id)
-    except APIError as exc:
-        if exc.status in (404, 503):
-            pytest.skip(f"optional OSD telemetry is unavailable (HTTP {exc.status})")
-        raise
-    response_data(response, Mapping)
+def test_live_up_osd_telemetry(live_client, live_up_osd_id, operation):
+    response_data(operation(live_client, live_up_osd_id), Mapping)
 
 
 def test_live_pool_list_has_stable_identities(live_pools):
@@ -116,14 +105,9 @@ def test_live_optional_cephfs_inventory(live_client):
     ((rbd.default_features, list), (rbd.clone_format_version, int)),
     ids=("default-features", "clone-format"),
 )
-def test_live_optional_rbd_defaults(live_client, live_settings, operation, expected_type):
-    try:
-        response = operation(live_client)
-    except APIError as exc:
-        if exc.status in (404, 503) and not live_settings.has_feature("rbd"):
-            pytest.skip(f"the RBD controller is unavailable (HTTP {exc.status})")
-        raise
-    response_data(response, expected_type)
+@pytest.mark.ceph_live_feature("rbd")
+def test_live_optional_rbd_defaults(live_client, operation, expected_type):
+    response_data(operation(live_client), expected_type)
 
 
 def test_salt_loader_executes_a_live_storage_module(live_client, monkeypatch, tmp_path):

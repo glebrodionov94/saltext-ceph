@@ -48,6 +48,7 @@ def _route(filesystem, path):
 
 
 def list_(client, filesystem, path="/", recursive=True):
+    """List snapshot schedules for a CephFS path."""
     filesystem = cephfs.route_name(filesystem, "filesystem")
     params = {
         "path": cephfs.filesystem_path(path),
@@ -68,6 +69,7 @@ def create(
     subvolume=None,
     group_name=None,
 ):
+    """Create a CephFS snapshot schedule."""
     data = cephfs.optional_params(
         fs=cephfs.name(filesystem, "filesystem"),
         path=cephfs.filesystem_path(path),
@@ -90,6 +92,7 @@ def update(
     group_name=None,
     confirm=False,
 ):
+    """Add or remove retention rules for a CephFS snapshot schedule."""
     if retention_to_add is None and retention_to_remove is None:
         raise ConfigurationError("Provide retention_to_add or retention_to_remove.")
     cephfs.boolean(confirm, "confirm")
@@ -115,6 +118,7 @@ def remove(
     group_name=None,
     confirm=False,
 ):
+    """Remove a CephFS snapshot schedule after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS snapshot schedule")
     params = cephfs.optional_params(
         schedule=_schedule(schedule),
@@ -147,10 +151,12 @@ def _activation(client, action, filesystem, path, schedule, start, subvolume, gr
 
 
 def activate(client, filesystem, path, schedule, start, subvolume=None, group_name=None):
+    """Activate a CephFS snapshot schedule."""
     return _activation(client, "activate", filesystem, path, schedule, start, subvolume, group_name)
 
 
 def deactivate(client, filesystem, path, schedule, start, subvolume=None, group_name=None):
+    """Deactivate a CephFS snapshot schedule."""
     return _activation(
         client, "deactivate", filesystem, path, schedule, start, subvolume, group_name
     )

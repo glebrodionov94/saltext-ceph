@@ -86,6 +86,19 @@ def test_create_bucket_omits_current_replication_for_reef_by_default(client):
     }
 
 
+def test_bucket_api_preserves_safe_create_defaults_across_layers(client, monkeypatch):
+    monkeypatch.setattr(rgw_bucket_api.ceph, "get_client", lambda *_: client)
+
+    rgw_bucket_api.create_bucket({}, {}, {}, "data", "alice")
+
+    assert client.request.call_args.kwargs["data"] == {
+        "bucket": "data",
+        "uid": "alice",
+        "lock_enabled": False,
+        "encryption_state": False,
+    }
+
+
 def test_create_bucket_sends_structured_current_options_without_mutation(client):
     kwargs = {
         "zonegroup": "zg1",

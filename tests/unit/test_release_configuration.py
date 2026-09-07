@@ -84,6 +84,33 @@ def test_release_uses_only_trusted_publishing():
     assert "vars.CEPH_RELEASES_ENABLED == 'true'" in release
 
 
+def test_docs_deploys_only_artifacts_from_validated_release_runs():
+    deployment = (WORKFLOW_ROOT / "deploy-docs-action.yml").read_text(encoding="utf-8")
+
+    assert "workflow_call:" not in deployment
+    assert "workflow_run:" in deployment
+    assert "github.event.workflow_run.conclusion == 'success'" in deployment
+    assert "github.event.workflow_run.head_repository.full_name == github.repository" in deployment
+    assert "github.event.workflow_run.name == 'Tagged Releases'" in deployment
+    assert "github.event.workflow_run.event == 'push'" in deployment
+    assert "github.event.workflow_run.name == 'Auto PR Releases'" in deployment
+    assert "github.event.workflow_run.event == 'pull_request'" in deployment
+    assert "vars.CEPH_RELEASES_ENABLED == 'true'" in deployment
+    assert "run-id: ${{ github.event.workflow_run.id }}" in deployment
+    assert deployment.count("actions: read") == 1
+    assert deployment.count("pages: write") == 1
+    assert deployment.count("id-token: write") == 1
+    assert "contents: write" not in deployment
+
+
+def test_docs_session_checks_the_sphinx_coverage_builder_report():
+    noxfile = (REPOSITORY_ROOT / "noxfile.py").read_text(encoding="utf-8")
+
+    assert '"tools" / "check_docs_coverage.py"' in noxfile
+    assert '"docs" / "_build" / "coverage" / "python.txt"' in noxfile
+    assert '"_build", "html", "python.txt"' not in noxfile
+
+
 def test_package_workflow_runs_all_distribution_checks():
     package = (WORKFLOW_ROOT / "package-action.yml").read_text(encoding="utf-8")
 

@@ -149,16 +149,19 @@ def normalize_qos_limits(limits):
 
 
 def list_clusters(client):
+    """List SMB clusters."""
     response = client.request("GET", CLUSTER_PATH, api_version=API_VERSION)
     return _safe_response(response, "Ceph SMB cluster list", list_response=True)
 
 
 def get_cluster(client, cluster_id):
+    """Return one SMB cluster."""
     response = client.request("GET", _route(CLUSTER_PATH, cluster_id), api_version=API_VERSION)
     return _safe_response(response, "Ceph SMB cluster")
 
 
 def create_cluster(client, resource):
+    """Create an SMB cluster from a cluster resource."""
     resource = normalize_cluster_resource(resource)
     response = client.request(
         "POST", CLUSTER_PATH, api_version=API_VERSION, data={"cluster_resource": resource}
@@ -167,6 +170,7 @@ def create_cluster(client, resource):
 
 
 def delete_cluster(client, cluster_id, confirm=False):
+    """Delete an SMB cluster after explicit confirmation."""
     if confirm is not True:
         raise ConfigurationError("Deleting an SMB cluster requires confirm=True.")
     response = client.request("DELETE", _route(CLUSTER_PATH, cluster_id), api_version=API_VERSION)
@@ -174,6 +178,7 @@ def delete_cluster(client, cluster_id, confirm=False):
 
 
 def list_shares(client, cluster_id=None):
+    """List SMB shares, optionally for one cluster."""
     params = {}
     if cluster_id is not None:
         params["cluster_id"] = _identifier(cluster_id, "cluster_id")
@@ -182,6 +187,7 @@ def list_shares(client, cluster_id=None):
 
 
 def get_share(client, cluster_id, share_id):
+    """Return one SMB share."""
     response = client.request(
         "GET", _route(SHARE_PATH, cluster_id, share_id), api_version=API_VERSION
     )
@@ -189,6 +195,7 @@ def get_share(client, cluster_id, share_id):
 
 
 def create_share(client, resource):
+    """Create an SMB share from a share resource."""
     resource = normalize_share_resource(resource)
     response = client.request(
         "POST", SHARE_PATH, api_version=API_VERSION, data={"share_resource": resource}
@@ -197,6 +204,7 @@ def create_share(client, resource):
 
 
 def update_share_qos(client, cluster_id, share_id, **limits):
+    """Update explicitly supplied QoS limits for an SMB share."""
     limits = normalize_qos_limits(limits)
     data = {
         "cluster_id": _identifier(cluster_id, "cluster_id"),
@@ -208,6 +216,7 @@ def update_share_qos(client, cluster_id, share_id, **limits):
 
 
 def delete_share(client, cluster_id, share_id, confirm=False):
+    """Delete an SMB share after explicit confirmation."""
     if confirm is not True:
         raise ConfigurationError("Deleting an SMB share requires confirm=True.")
     response = client.request(
@@ -217,16 +226,19 @@ def delete_share(client, cluster_id, share_id, confirm=False):
 
 
 def list_join_auths(client):
+    """List SMB join-auth resources."""
     response = client.request("GET", JOIN_AUTH_PATH, api_version=API_VERSION)
     return _safe_response(response, "Ceph SMB join-auth list", list_response=True)
 
 
 def get_join_auth(client, auth_id):
+    """Return one SMB join-auth resource."""
     response = client.request("GET", _route(JOIN_AUTH_PATH, auth_id), api_version=API_VERSION)
     return _safe_response(response, "Ceph SMB join auth")
 
 
 def create_join_auth(client, auth_id, username, password, linked_to_cluster=None):
+    """Create an SMB join-auth resource from domain credentials."""
     if not isinstance(username, str) or not username or re.search(r"[\x00-\x1f\x7f]", username):
         raise ConfigurationError("username must be non-empty text without controls.")
     if not isinstance(password, str) or not password or "\x00" in password:
@@ -246,6 +258,7 @@ def create_join_auth(client, auth_id, username, password, linked_to_cluster=None
 
 
 def delete_join_auth(client, auth_id, confirm=False):
+    """Delete an SMB join-auth resource after explicit confirmation."""
     if confirm is not True:
         raise ConfigurationError("Deleting SMB join auth requires confirm=True.")
     response = client.request("DELETE", _route(JOIN_AUTH_PATH, auth_id), api_version=API_VERSION)
@@ -253,11 +266,13 @@ def delete_join_auth(client, auth_id, confirm=False):
 
 
 def list_usersgroups(client):
+    """List SMB users/groups resources."""
     response = client.request("GET", USERS_GROUPS_PATH, api_version=API_VERSION)
     return _safe_response(response, "Ceph SMB users/groups list", list_response=True)
 
 
 def get_usersgroups(client, users_groups_id):
+    """Return one SMB users/groups resource."""
     response = client.request(
         "GET", _route(USERS_GROUPS_PATH, users_groups_id), api_version=API_VERSION
     )
@@ -265,6 +280,7 @@ def get_usersgroups(client, users_groups_id):
 
 
 def create_usersgroups(client, users_groups_id, values, linked_to_cluster=None):
+    """Create an SMB users/groups resource."""
     if not isinstance(values, Mapping) or set(values) != {"users", "groups"}:
         raise ConfigurationError("values must contain users and groups.")
     values = validation.json_value(values, "values")
@@ -297,6 +313,7 @@ def create_usersgroups(client, users_groups_id, values, linked_to_cluster=None):
 
 
 def delete_usersgroups(client, users_groups_id, confirm=False):
+    """Delete an SMB users/groups resource after explicit confirmation."""
     if confirm is not True:
         raise ConfigurationError("Deleting SMB users/groups requires confirm=True.")
     response = client.request(

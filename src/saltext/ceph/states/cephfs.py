@@ -33,6 +33,7 @@ def __virtual__():
         "cephfs.list",
         "cephfs.create",
         "cephfs.remove",
+        "ceph_service.daemons",
         "cephfs.root_directory",
         "cephfs.list_directories",
         "cephfs.make_directory",
@@ -119,6 +120,30 @@ def _filesystem(name, profile):
     return matches[0] if matches else None
 
 
+def _mds_daemons(name, profile):
+    """Return exact MDS daemon identities for the filesystem's cephadm service."""
+    service_name = f"mds.{name}"
+    items = reconcile.data(
+        __salt__["ceph_service.daemons"](service_name, profile=profile),
+        f"Ceph MDS service {service_name} daemon list",
+        expected=list,
+    )
+    names = []
+    for item in items:
+        if (
+            not isinstance(item, Mapping)
+            or item.get("daemon_type") != "mds"
+            or not isinstance(item.get("daemon_name"), str)
+        ):
+            raise ProtocolError(
+                "Ceph MDS service daemon list returned an unexpected response shape."
+            )
+        names.append(item["daemon_name"])
+    if len(set(names)) != len(names):
+        raise ProtocolError("Ceph MDS service daemon list returned duplicate daemons.")
+    return sorted(names)
+
+
 def filesystem_present(
     name,
     service_spec,
@@ -174,13 +199,37 @@ def filesystem_absent(
     task_timeout=300.0,
     task_interval=2.0,
 ):
-    """Ensure a filesystem is absent; live removal requires ``confirm=True``."""
+    """Ensure a filesystem and its cephadm MDS daemons are absent.
+
+    Live filesystem removal requires ``confirm=True``. Cephadm removes the
+    implicitly created ``mds.<filesystem>`` service asynchronously, so this
+    state also waits for that exact service's daemon inventory to become empty.
+    """
     ret = reconcile.state_result(name)
     try:
         name = cephfs_utils.name(name, "fs_name")
         _confirm_type(confirm)
         current = _filesystem(name, profile)
         if current is None:
+            daemons = _mds_daemons(name, profile)
+            if daemons and __opts__.get("test", False):
+                return reconcile.planned(
+                    ret,
+                    {"mds_daemons": daemons},
+                    None,
+                    f"CephFS filesystem {name} is absent; its MDS daemons would be awaited.",
+                )
+            if daemons:
+                reconcile.wait_for_convergence(
+                    lambda: _mds_daemons(name, profile),
+                    lambda observed: not observed,
+                    timeout=task_timeout,
+                    interval=task_interval,
+                    timeout_message=(
+                        f"CephFS filesystem {name} is absent but MDS service mds.{name} "
+                        "still has daemons."
+                    ),
+                )
             return reconcile.no_change(ret, f"CephFS filesystem {name} is already absent.")
         if __opts__.get("test", False):
             return reconcile.planned(
@@ -190,8 +239,15 @@ def filesystem_absent(
             raise ConfigurationError("Removing a CephFS filesystem requires confirm=True.")
         response = __salt__["cephfs.remove"](name, confirm=True, profile=profile)
         _wait(response, profile, task_timeout, task_interval)
-        if _filesystem(name, profile) is not None:
-            raise ProtocolError(f"CephFS filesystem {name} still exists after removal.")
+        reconcile.wait_for_convergence(
+            lambda: (_filesystem(name, profile), _mds_daemons(name, profile)),
+            lambda observed: observed == (None, []),
+            timeout=task_timeout,
+            interval=task_interval,
+            timeout_message=(
+                f"CephFS filesystem {name} or its MDS service daemons still exist after removal."
+            ),
+        )
         return reconcile.changed(ret, current, None, f"CephFS filesystem {name} was removed.")
     except _ERRORS as exc:
         return reconcile.failed(ret, exc)

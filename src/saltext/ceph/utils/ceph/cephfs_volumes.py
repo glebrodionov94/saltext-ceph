@@ -14,6 +14,7 @@ def _group(group_name):
 
 
 def subvolume_list(client, volume, group_name=None, info=True):
+    """List subvolumes in a CephFS volume or group."""
     volume = cephfs.route_name(volume, "volume")
     params = cephfs.optional_params(
         group_name=_group(group_name), info=cephfs.boolean(info, "info")
@@ -24,6 +25,7 @@ def subvolume_list(client, volume, group_name=None, info=True):
 
 
 def subvolume_info(client, volume, subvolume, group_name=None):
+    """Get details for a CephFS subvolume."""
     volume = cephfs.route_name(volume, "volume")
     params = cephfs.optional_params(
         subvol_name=cephfs.name(subvolume, "subvolume"), group_name=_group(group_name)
@@ -34,6 +36,7 @@ def subvolume_info(client, volume, subvolume, group_name=None):
 
 
 def subvolume_create(client, volume, subvolume, options=None):
+    """Create a CephFS subvolume."""
     data = {
         "vol_name": cephfs.name(volume, "volume"),
         "subvol_name": cephfs.name(subvolume, "subvolume"),
@@ -43,6 +46,7 @@ def subvolume_create(client, volume, subvolume, options=None):
 
 
 def subvolume_resize(client, volume, subvolume, size, group_name=None):
+    """Resize a CephFS subvolume."""
     volume_path = cephfs.route_name(volume, "volume")
     if isinstance(size, bool) or not isinstance(size, (str, int)) or str(size).strip() == "":
         raise ConfigurationError("size must be a non-empty string or integer.")
@@ -65,6 +69,7 @@ def subvolume_remove(
     retain_snapshots=False,
     confirm=False,
 ):
+    """Remove a CephFS subvolume after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS subvolume")
     volume_path = cephfs.route_name(volume, "volume")
     params = cephfs.optional_params(
@@ -78,6 +83,7 @@ def subvolume_remove(
 
 
 def subvolume_exists(client, volume, group_name=None):
+    """Check whether subvolumes exist in a CephFS volume or group."""
     volume_path = cephfs.route_name(volume, "volume")
     return client.request(
         "GET",
@@ -123,6 +129,7 @@ def set_snapshot_visibility(client, volume, subvolume, value, group_name=None):
 
 
 def group_list(client, volume, info=True):
+    """List subvolume groups in a CephFS volume."""
     volume = cephfs.route_name(volume, "volume")
     return client.request(
         "GET",
@@ -133,6 +140,7 @@ def group_list(client, volume, info=True):
 
 
 def group_info(client, volume, group_name):
+    """Get details for a CephFS subvolume group."""
     volume = cephfs.route_name(volume, "volume")
     return client.request(
         "GET",
@@ -143,6 +151,7 @@ def group_info(client, volume, group_name):
 
 
 def group_create(client, volume, group_name, options=None):
+    """Create a CephFS subvolume group."""
     data = {
         "vol_name": cephfs.name(volume, "volume"),
         "group_name": cephfs.name(group_name, "group_name"),
@@ -152,6 +161,7 @@ def group_create(client, volume, group_name, options=None):
 
 
 def group_resize(client, volume, group_name, size):
+    """Resize a CephFS subvolume group."""
     volume_path = cephfs.route_name(volume, "volume")
     if isinstance(size, bool) or not isinstance(size, (str, int)) or str(size).strip() == "":
         raise ConfigurationError("size must be a non-empty string or integer.")
@@ -160,6 +170,7 @@ def group_resize(client, volume, group_name, size):
 
 
 def group_remove(client, volume, group_name, confirm=False):
+    """Remove a CephFS subvolume group after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS subvolume group")
     volume_path = cephfs.route_name(volume, "volume")
     return client.request(
@@ -171,6 +182,7 @@ def group_remove(client, volume, group_name, confirm=False):
 
 
 def snapshot_list(client, volume, subvolume, group_name=None, info=True):
+    """List snapshots of a CephFS subvolume."""
     volume_path = cephfs.route_name(volume, "volume")
     subvolume_path = cephfs.route_name(subvolume, "subvolume")
     params = cephfs.optional_params(
@@ -185,6 +197,7 @@ def snapshot_list(client, volume, subvolume, group_name=None, info=True):
 
 
 def snapshot_info(client, volume, subvolume, snapshot, group_name=None):
+    """Get details for a CephFS subvolume snapshot."""
     volume_path = cephfs.route_name(volume, "volume")
     subvolume_path = cephfs.route_name(subvolume, "subvolume")
     params = cephfs.optional_params(
@@ -199,6 +212,7 @@ def snapshot_info(client, volume, subvolume, snapshot, group_name=None):
 
 
 def snapshot_create(client, volume, subvolume, snapshot, group_name=None):
+    """Create a snapshot of a CephFS subvolume."""
     data = {
         "vol_name": cephfs.name(volume, "volume"),
         "subvol_name": cephfs.name(subvolume, "subvolume"),
@@ -218,6 +232,7 @@ def snapshot_remove(
     force=True,
     confirm=False,
 ):
+    """Remove a CephFS subvolume snapshot after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS subvolume snapshot")
     volume_path = cephfs.route_name(volume, "volume")
     subvolume_path = cephfs.route_name(subvolume, "subvolume")
@@ -243,6 +258,7 @@ def snapshot_clone(
     group_name=None,
     target_group_name=None,
 ):
+    """Clone a CephFS subvolume snapshot into a new subvolume."""
     data = {
         "vol_name": cephfs.name(volume, "volume"),
         "subvol_name": cephfs.name(subvolume, "subvolume"),

@@ -34,6 +34,7 @@ def connect(
     allow_http=False,
     profile="default",
 ):
+    """Connect a remote Ceph cluster to the local multi-cluster hub."""
     return multi_cluster.connect(
         _client(opts, pillar, context, profile),
         url,
@@ -49,6 +50,7 @@ def connect(
 
 
 def set_current(opts, pillar, context, url, username, allow_http=False, profile="default"):
+    """Select the current cluster for multi-cluster Dashboard operations."""
     return multi_cluster.set_current(
         _client(opts, pillar, context, profile), url, username, allow_http
     ).as_dict()
@@ -68,6 +70,7 @@ def reconnect(
     allow_http=False,
     profile="default",
 ):
+    """Refresh credentials and reconnect an existing remote cluster."""
     return multi_cluster.reconnect(
         _client(opts, pillar, context, profile),
         url,
@@ -94,6 +97,7 @@ def edit(
     allow_http=False,
     profile="default",
 ):
+    """Update the connection metadata for a managed cluster."""
     return multi_cluster.edit(
         _client(opts, pillar, context, profile),
         cluster_name,
@@ -115,24 +119,29 @@ def delete(
     confirm=False,
     profile="default",
 ):
+    """Remove a cluster connection after explicit confirmation."""
     return multi_cluster.delete(
         _client(opts, pillar, context, profile), cluster_name, cluster_user, confirm
     ).as_dict()
 
 
 def get_config(opts, pillar, context, include_secrets=False, profile="default"):
+    """Return the Dashboard multi-cluster configuration."""
     return multi_cluster.get_config(
         _client(opts, pillar, context, profile), include_secrets
     ).as_dict()
 
 
 def token_status(opts, pillar, context, profile="default"):
+    """Return the authentication token status for connected clusters."""
     return multi_cluster.token_status(_client(opts, pillar, context, profile)).as_dict()
 
 
 def security_config(opts, pillar, context, profile="default"):
+    """Return the multi-cluster security configuration."""
     return multi_cluster.security_config(_client(opts, pillar, context, profile)).as_dict()
 
 
 def prometheus_api_url(opts, pillar, context, profile="default"):
+    """Return the Prometheus API URL configured for multi-cluster use."""
     return multi_cluster.prometheus_api_url(_client(opts, pillar, context, profile)).as_dict()

@@ -17,6 +17,7 @@ _NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
 def _name(value, label, optional=False):
+    """Validate and return a CRUSH rule identifier."""
     if value is None and optional:
         return None
     if not isinstance(value, str) or not _NAME_PATTERN.fullmatch(value):

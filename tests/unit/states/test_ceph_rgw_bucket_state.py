@@ -141,6 +141,50 @@ def test_versioning_updates_and_post_reads(monkeypatch):
     assert result["result"] is True
 
 
+def test_versioning_plans_enablement_from_current_off_status(monkeypatch):
+    salt = bucket_reads(details=bucket(versioning="Off"))
+    salt["ceph_rgw_bucket.update_bucket"] = Mock()
+    monkeypatch.setattr(state, "__salt__", salt)
+    monkeypatch.setattr(state, "__opts__", {"test": True})
+
+    result = state.versioning_present("data", "Enabled")
+
+    assert result["result"] is None
+    assert result["changes"] == {"old": "Off", "new": "Enabled"}
+    salt["ceph_rgw_bucket.update_bucket"].assert_not_called()
+
+
+def test_versioning_enables_current_off_status_and_verifies(monkeypatch):
+    before = bucket(versioning="Off")
+    after = bucket(versioning="Enabled")
+    salt = bucket_reads(details=before)
+    salt["ceph_rgw_bucket.list_buckets"].side_effect = [
+        envelope(["data"]),
+        envelope(["data"]),
+    ]
+    salt["ceph_rgw_bucket.get_bucket"].side_effect = [envelope(before), envelope(after)]
+    salt["ceph_rgw_bucket.update_bucket"] = Mock(return_value=envelope(status=200))
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.versioning_present("data", "Enabled")
+
+    assert result["result"] is True
+    assert result["changes"] == {"old": "Off", "new": "Enabled"}
+    assert salt["ceph_rgw_bucket.update_bucket"].call_args.kwargs["versioning_state"] == "Enabled"
+
+
+def test_versioning_rejects_unknown_current_status(monkeypatch):
+    salt = bucket_reads(details=bucket(versioning="Disabled"))
+    salt["ceph_rgw_bucket.update_bucket"] = Mock()
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.versioning_present("data", "Enabled")
+
+    assert result["result"] is False
+    assert "usable versioning status" in result["comment"]
+    salt["ceph_rgw_bucket.update_bucket"].assert_not_called()
+
+
 def test_encryption_reads_nested_s3_shape(monkeypatch):
     encryption = {
         "Status": "Enabled",

@@ -174,10 +174,16 @@ def _desired_image(
     return desired
 
 
-def _image(image_spec, profile):
+def _image(image_spec, profile, omit_usage=False):
+    if not isinstance(omit_usage, bool):
+        raise ConfigurationError("omit_usage must be a boolean.")
     try:
         item = reconcile.data(
-            __salt__["ceph_rbd.get"](image_spec, profile=profile),
+            __salt__["ceph_rbd.get"](
+                image_spec,
+                omit_usage=omit_usage,
+                profile=profile,
+            ),
             "Ceph RBD image read",
             expected=Mapping,
         )
@@ -337,8 +343,14 @@ def image_present(
     profile="default",
     task_timeout=300.0,
     task_interval=2.0,
+    omit_usage=False,
 ):
-    """Ensure an RBD image has the complete declared, observable fields."""
+    """Ensure an RBD image has the complete declared, observable fields.
+
+    Set ``omit_usage=True`` to skip the potentially expensive image-usage scan
+    on Ceph releases that support it. The default leaves the query parameter
+    absent for compatibility with Reef.
+    """
     ret = reconcile.state_result(name)
     try:
         if not isinstance(confirm, bool):
@@ -355,7 +367,7 @@ def image_present(
             metadata,
             mirror_mode,
         )
-        item = _image(name, profile)
+        item = _image(name, profile, omit_usage)
         current = _image_projection(item, desired)
         if current == desired:
             return reconcile.no_change(ret, f"RBD image {name} is already current.")
@@ -404,7 +416,7 @@ def image_present(
             timeout=task_timeout,
             interval=task_interval,
         )
-        after = _image_projection(_image(name, profile), desired)
+        after = _image_projection(_image(name, profile, omit_usage), desired)
         if after != desired:
             raise ProtocolError(f"RBD image {name} did not converge after mutation.")
         return reconcile.changed(ret, current, after, f"RBD image {name} was reconciled.")
@@ -418,14 +430,19 @@ def image_absent(
     profile="default",
     task_timeout=300.0,
     task_interval=2.0,
+    omit_usage=False,
 ):
-    """Ensure an RBD image is absent; permanent deletion requires confirmation."""
+    """Ensure an RBD image is absent; permanent deletion requires confirmation.
+
+    Set ``omit_usage=True`` to skip usage collection on supported Ceph releases.
+    It remains disabled by default because Reef does not accept that query.
+    """
     ret = reconcile.state_result(name)
     try:
         rbd.validate_image_spec(name)
         if not isinstance(confirm, bool):
             raise ConfigurationError("confirm must be a boolean.")
-        item = _image(name, profile)
+        item = _image(name, profile, omit_usage)
         if item is None:
             return reconcile.no_change(ret, f"RBD image {name} is already absent.")
         current = {
@@ -441,7 +458,7 @@ def image_absent(
         reconcile.wait_if_accepted(
             __salt__, response, profile=profile, timeout=task_timeout, interval=task_interval
         )
-        if _image(name, profile) is not None:
+        if _image(name, profile, omit_usage) is not None:
             raise ProtocolError(f"RBD image {name} still exists after deletion.")
         return reconcile.changed(ret, current, None, f"RBD image {name} was deleted.")
     except _ERRORS as exc:
@@ -577,8 +594,14 @@ def snapshot_present(
     profile="default",
     task_timeout=300.0,
     task_interval=2.0,
+    omit_usage=False,
 ):
-    """Ensure an image snapshot exists and optionally manage protection."""
+    """Ensure an image snapshot exists and optionally manage protection.
+
+    Snapshots are read through their parent image. Set ``omit_usage=True`` to
+    avoid its usage scan on supported releases; the Reef-compatible default
+    leaves the query parameter absent.
+    """
     ret = reconcile.state_result(name)
     try:
         name = validation.identifier(name, "snapshot_name")
@@ -588,7 +611,7 @@ def snapshot_present(
         desired = {"name": name}
         if is_protected is not None:
             desired["is_protected"] = is_protected
-        image = _image(image_spec, profile)
+        image = _image(image_spec, profile, omit_usage)
         if image is None:
             raise ConfigurationError(f"Parent RBD image {image_spec} does not exist.")
         current = _snapshot(image, name, is_protected is not None)
@@ -608,7 +631,7 @@ def snapshot_present(
             reconcile.wait_if_accepted(
                 __salt__, response, profile=profile, timeout=task_timeout, interval=task_interval
             )
-            image = _image(image_spec, profile)
+            image = _image(image_spec, profile, omit_usage)
             current_after_create = _snapshot(image, name, is_protected is not None)
             if current_after_create is None:
                 raise ProtocolError(
@@ -627,7 +650,7 @@ def snapshot_present(
             reconcile.wait_if_accepted(
                 __salt__, response, profile=profile, timeout=task_timeout, interval=task_interval
             )
-        after_image = _image(image_spec, profile)
+        after_image = _image(image_spec, profile, omit_usage)
         after = _snapshot(after_image, name, is_protected is not None)
         if after != desired:
             raise ProtocolError(f"RBD snapshot {image_spec}@{name} did not converge.")
@@ -648,15 +671,20 @@ def snapshot_absent(
     profile="default",
     task_timeout=300.0,
     task_interval=2.0,
+    omit_usage=False,
 ):
-    """Ensure an image snapshot is absent; deletion requires confirmation."""
+    """Ensure an image snapshot is absent; deletion requires confirmation.
+
+    Set ``omit_usage=True`` to skip parent-image usage collection on supported
+    Ceph releases. The default remains compatible with Reef.
+    """
     ret = reconcile.state_result(name)
     try:
         name = validation.identifier(name, "snapshot_name")
         rbd.validate_image_spec(image_spec)
         if not isinstance(confirm, bool):
             raise ConfigurationError("confirm must be a boolean.")
-        image = _image(image_spec, profile)
+        image = _image(image_spec, profile, omit_usage)
         current = None if image is None else _snapshot(image, name, False)
         if current is None:
             return reconcile.no_change(ret, f"RBD snapshot {image_spec}@{name} is already absent.")
@@ -672,7 +700,7 @@ def snapshot_absent(
         reconcile.wait_if_accepted(
             __salt__, response, profile=profile, timeout=task_timeout, interval=task_interval
         )
-        after_image = _image(image_spec, profile)
+        after_image = _image(image_spec, profile, omit_usage)
         if after_image is not None and _snapshot(after_image, name, False) is not None:
             raise ProtocolError(f"RBD snapshot {image_spec}@{name} still exists after deletion.")
         return reconcile.changed(

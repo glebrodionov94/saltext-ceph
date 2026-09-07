@@ -431,6 +431,7 @@ def lint_code(session):
             "setup.py",
             "noxfile.py",
             "src/",
+            "tools/check_docs_coverage.py",
             "tools/check_dist.py",
             "tools/check_secrets.py",
             "tools/live_test_policy.py",
@@ -466,6 +467,7 @@ def lint_code_pre_commit(session):
             "setup.py",
             "noxfile.py",
             "src/",
+            "tools/check_docs_coverage.py",
             "tools/check_dist.py",
             "tools/check_secrets.py",
             "tools/live_test_policy.py",
@@ -524,12 +526,11 @@ def docs(session):
     session.run("make", "clean", external=True)
     session.run("make", "linkcheck", "SPHINXOPTS=-W", external=True, env=env)
     session.run("make", "coverage", "SPHINXOPTS=-W", external=True, env=env)
-    docs_coverage_file = os.path.join("_build", "html", "python.txt")
-    if os.path.exists(docs_coverage_file):
-        with open(docs_coverage_file) as rfh:  # pylint: disable=unspecified-encoding
-            contents = rfh.readlines()[2:]
-            if contents:
-                session.error("\n" + "".join(contents))
+    session.run(
+        "python",
+        str(REPO_ROOT / "tools" / "check_docs_coverage.py"),
+        str(REPO_ROOT / "docs" / "_build" / "coverage" / "python.txt"),
+    )
     session.run("make", "html", "SPHINXOPTS=-W", external=True, env=env)
     os.chdir(str(REPO_ROOT))
 

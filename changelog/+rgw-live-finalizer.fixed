@@ -1,0 +1,1 @@
+Avoid querying RGW Admin Ops through a removed daemon after the destructive lifecycle has already confirmed bucket, user, and service absence.

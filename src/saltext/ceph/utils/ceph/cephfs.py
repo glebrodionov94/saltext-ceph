@@ -59,6 +59,7 @@ def route_filesystem_path(value):
 
 
 def boolean(value, label):
+    """Validate and return a boolean value."""
     if not isinstance(value, bool):
         raise ConfigurationError(f"{label} must be a boolean.")
     return value
@@ -70,6 +71,7 @@ def confirmed(value, action):
 
 
 def positive_integer(value, label, *, allow_zero=False):
+    """Validate and return a positive or optionally non-negative integer."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigurationError(f"{label} must be an integer.")
     if value < 0 or (value == 0 and not allow_zero):
@@ -79,6 +81,7 @@ def positive_integer(value, label, *, allow_zero=False):
 
 
 def text(value, label):
+    """Validate and return a non-empty single-line string."""
     if not isinstance(value, str) or not value or re.search(r"[\x00-\x1f\x7f]", value):
         raise ConfigurationError(f"{label} must be a non-empty single-line string.")
     return value
@@ -113,14 +116,17 @@ def options(value, reserved=()):
 
 
 def optional_params(**values):
+    """Return parameters whose values are neither None nor empty strings."""
     return {key: value for key, value in values.items() if value not in (None, "")}
 
 
 def list_(client):
+    """List CephFS filesystems."""
     return client.request("GET", RESOURCE_PATH, api_version=API_VERSION)
 
 
 def create(client, fs_name, service_spec, data_pool=None, metadata_pool=None):
+    """Create a CephFS filesystem."""
     fs_name = name(fs_name, "fs_name")
     if not isinstance(service_spec, Mapping):
         raise ConfigurationError("service_spec must be a mapping.")
@@ -136,6 +142,7 @@ def create(client, fs_name, service_spec, data_pool=None, metadata_pool=None):
 
 
 def remove(client, fs_name, confirm=False):
+    """Remove a CephFS filesystem after explicit confirmation."""
     confirmed(confirm, "Removing a CephFS filesystem")
     return client.request(
         "DELETE",
@@ -145,12 +152,14 @@ def remove(client, fs_name, confirm=False):
 
 
 def rename(client, fs_name, new_name, confirm=False):
+    """Rename a CephFS filesystem after explicit confirmation."""
     confirmed(confirm, "Renaming a CephFS filesystem")
     data = {"name": name(fs_name, "fs_name"), "new_name": name(new_name, "new_name")}
     return client.request("PUT", f"{RESOURCE_PATH}/rename", api_version=API_VERSION, data=data)
 
 
 def authorize(client, fs_name, client_id, caps, root_squash=False):
+    """Authorize a client to access paths in a CephFS filesystem."""
     if isinstance(caps, (str, bytes)) or not isinstance(caps, Sequence) or not caps:
         raise ConfigurationError("caps must be a non-empty list of path/capability strings.")
     caps = [text(item, "caps item") for item in caps]
@@ -168,16 +177,19 @@ def authorize(client, fs_name, client_id, caps, root_squash=False):
 
 
 def get(client, fs_id):
+    """Get details for a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request("GET", f"{RESOURCE_PATH}/{fs_id}", api_version=API_VERSION)
 
 
 def clients(client, fs_id):
+    """List clients connected to a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request("GET", f"{RESOURCE_PATH}/{fs_id}/clients", api_version=API_VERSION)
 
 
 def evict_client(client, fs_id, client_id, confirm=False):
+    """Evict a client from a CephFS filesystem after confirmation."""
     confirmed(confirm, "Evicting a CephFS client")
     fs_id = identifier(fs_id, "fs_id")
     client_id = identifier(client_id, "client_id")
@@ -187,6 +199,7 @@ def evict_client(client, fs_id, client_id, confirm=False):
 
 
 def mds_counters(client, fs_id, counters=None):
+    """Get MDS performance counters for a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     if counters is not None:
         if isinstance(counters, (str, bytes)) or not isinstance(counters, Sequence):
@@ -201,6 +214,7 @@ def mds_counters(client, fs_id, counters=None):
 
 
 def root_directory(client, fs_id):
+    """Get the root directory for a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
         "GET", f"{RESOURCE_PATH}/{fs_id}/get_root_directory", api_version=API_VERSION
@@ -208,6 +222,7 @@ def root_directory(client, fs_id):
 
 
 def list_directories(client, fs_id, path=None, depth=1):
+    """List directories below a path in a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     if path is not None:
         path = filesystem_path(path)
@@ -221,6 +236,7 @@ def list_directories(client, fs_id, path=None, depth=1):
 
 
 def make_directory(client, fs_id, path):
+    """Create a directory in a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
         "POST",
@@ -231,6 +247,7 @@ def make_directory(client, fs_id, path):
 
 
 def remove_directory(client, fs_id, path, confirm=False):
+    """Remove a CephFS directory after explicit confirmation."""
     confirmed(confirm, "Removing a CephFS directory")
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
@@ -242,6 +259,7 @@ def remove_directory(client, fs_id, path, confirm=False):
 
 
 def get_quota(client, fs_id, path):
+    """Get quota limits for a CephFS path."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
         "GET",
@@ -252,6 +270,7 @@ def get_quota(client, fs_id, path):
 
 
 def set_quota(client, fs_id, path, max_bytes=None, max_files=None):
+    """Set byte and/or file quota limits for a CephFS path."""
     fs_id = identifier(fs_id, "fs_id")
     if max_bytes is None and max_files is None:
         raise ConfigurationError("At least one quota limit must be provided.")
@@ -266,6 +285,7 @@ def set_quota(client, fs_id, path, max_bytes=None, max_files=None):
 
 
 def write_file(client, fs_id, path, contents, confirm=False):
+    """Write or replace a text file in a CephFS filesystem."""
     confirmed(confirm, "Writing or replacing a CephFS file")
     fs_id = identifier(fs_id, "fs_id")
     if not isinstance(contents, str) or "\x00" in contents:
@@ -279,6 +299,7 @@ def write_file(client, fs_id, path, contents, confirm=False):
 
 
 def unlink(client, fs_id, path, confirm=False):
+    """Unlink a CephFS path after explicit confirmation."""
     confirmed(confirm, "Unlinking a CephFS path")
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
@@ -290,6 +311,7 @@ def unlink(client, fs_id, path, confirm=False):
 
 
 def statfs(client, fs_id, path):
+    """Get filesystem statistics for a CephFS path."""
     fs_id = identifier(fs_id, "fs_id")
     return client.request(
         "GET",
@@ -300,6 +322,7 @@ def statfs(client, fs_id, path):
 
 
 def create_snapshot(client, fs_id, path, snapshot_name=None):
+    """Create a directory snapshot in a CephFS filesystem."""
     fs_id = identifier(fs_id, "fs_id")
     data = {"path": filesystem_path(path)}
     if snapshot_name is not None:
@@ -310,6 +333,7 @@ def create_snapshot(client, fs_id, path, snapshot_name=None):
 
 
 def remove_snapshot(client, fs_id, path, snapshot_name, confirm=False):
+    """Remove a CephFS directory snapshot after explicit confirmation."""
     confirmed(confirm, "Removing a CephFS directory snapshot")
     fs_id = identifier(fs_id, "fs_id")
     params = {"path": filesystem_path(path), "name": name(snapshot_name, "snapshot_name")}
@@ -319,6 +343,7 @@ def remove_snapshot(client, fs_id, path, snapshot_name, confirm=False):
 
 
 def rename_path(client, fs_id, source, destination, confirm=False):
+    """Rename a CephFS path after explicit confirmation."""
     confirmed(confirm, "Renaming a CephFS path")
     fs_id = identifier(fs_id, "fs_id")
     data = {

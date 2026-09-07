@@ -14,6 +14,7 @@ _OPTION_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 
 def _module_name(value):
+    """Validate and return a manageable manager module name."""
     value = validation.identifier(value, "module_name")
     if value == "selftest":
         raise ConfigurationError("The selftest manager module is not managed by Dashboard.")
@@ -26,6 +27,7 @@ def _path(module_name, suffix=None):
 
 
 def _config(values):
+    """Validate and normalize manager module configuration."""
     if not isinstance(values, Mapping):
         raise ConfigurationError("config must be a mapping.")
     normalized = {}

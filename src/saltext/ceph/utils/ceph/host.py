@@ -18,10 +18,12 @@ _SORT_PATTERN = re.compile(r"[+-]?hostname")
 
 
 def _hostname(value):
+    """Validate and return a host name."""
     return validation.identifier(value, "hostname")
 
 
 def _labels(values, optional=True):
+    """Validate and normalize host labels."""
     if values is None and optional:
         return None
     if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
@@ -35,6 +37,7 @@ def _labels(values, optional=True):
 
 
 def _optional_text(value, label, max_length=255):
+    """Validate and return an optional bounded text value."""
     if value is None:
         return None
     if (

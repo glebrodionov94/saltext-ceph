@@ -68,7 +68,7 @@ def test_image_present_is_idempotent_for_exact_public_projection(monkeypatch):
     assert result["result"] is True
     assert not result["changes"]
     update.assert_not_called()
-    assert get.call_args.kwargs == {"profile": "default"}
+    assert get.call_args.kwargs == {"omit_usage": False, "profile": "default"}
 
 
 def test_image_present_test_mode_plans_create_without_mutation(monkeypatch):
@@ -105,7 +105,12 @@ def test_image_present_creates_waits_and_post_reads(monkeypatch):
         "__salt__",
         {"ceph_rbd.get": get, "ceph_rbd.create": create, "ceph_task.wait": wait},
     )
-    result = state.image_present("rbd/vm", 1024, features=["layering"])
+    result = state.image_present(
+        "rbd/vm",
+        1024,
+        features=["layering"],
+        omit_usage=True,
+    )
     assert result["result"] is True
     create.assert_called_once_with(
         "vm",
@@ -124,6 +129,11 @@ def test_image_present_creates_waits_and_post_reads(monkeypatch):
     )
     wait.assert_called_once()
     assert get.call_count == 2
+    assert all(
+        invocation.args == ("rbd/vm",)
+        and invocation.kwargs == {"omit_usage": True, "profile": "default"}
+        for invocation in get.call_args_list
+    )
 
 
 def test_image_present_sends_only_supported_mutable_drift(monkeypatch):
@@ -205,13 +215,29 @@ def test_image_absent_requires_confirmation_and_verifies_deletion(monkeypatch):
     monkeypatch.setattr(state, "__salt__", {"ceph_rbd.get": get, "ceph_rbd.delete": delete})
     assert state.image_absent("rbd/vm")["result"] is False
     delete.assert_not_called()
+    get.reset_mock()
     get.side_effect = [
         envelope(image()),
         CommandExecutionError("missing", info={"status": 404}),
     ]
-    result = state.image_absent("rbd/vm", confirm=True)
+    result = state.image_absent("rbd/vm", confirm=True, omit_usage=True)
     assert result["result"] is True
     assert result["changes"]["new"] is None
+    assert all(
+        invocation.kwargs == {"omit_usage": True, "profile": "default"}
+        for invocation in get.call_args_list
+    )
+
+
+def test_image_state_rejects_non_boolean_omit_usage_before_read(monkeypatch):
+    get = Mock()
+    monkeypatch.setattr(state, "__salt__", {"ceph_rbd.get": get})
+
+    result = state.image_present("rbd/vm", 1024, omit_usage="true")
+
+    assert result["result"] is False
+    assert "omit_usage must be a boolean" in result["comment"]
+    get.assert_not_called()
 
 
 def test_credential_like_metadata_is_rejected_before_read_and_not_echoed(monkeypatch):
@@ -306,11 +332,20 @@ def test_snapshot_present_creates_protects_waits_and_preserves_old_none(monkeypa
             "ceph_task.wait": wait,
         },
     )
-    result = state.snapshot_present("daily", "rbd/vm", is_protected=True)
+    result = state.snapshot_present(
+        "daily",
+        "rbd/vm",
+        is_protected=True,
+        omit_usage=True,
+    )
     assert result["result"] is True
     assert result["changes"]["old"] is None
     assert result["changes"]["new"] == {"name": "daily", "is_protected": True}
     assert wait.call_count == 2
+    assert all(
+        invocation.kwargs == {"omit_usage": True, "profile": "default"}
+        for invocation in get.call_args_list
+    )
 
 
 def test_snapshot_present_rejects_mirroring_snapshot_protection(monkeypatch):
@@ -337,9 +372,18 @@ def test_snapshot_absent_confirmation_and_post_read(monkeypatch):
         "__salt__",
         {"ceph_rbd.get": get, "ceph_rbd.snapshot_delete": delete},
     )
-    result = state.snapshot_absent("daily", "rbd/vm", confirm=True)
+    result = state.snapshot_absent(
+        "daily",
+        "rbd/vm",
+        confirm=True,
+        omit_usage=True,
+    )
     assert result["result"] is True
     delete.assert_called_once_with("rbd/vm", "daily", confirm=True, profile="default")
+    assert all(
+        invocation.kwargs == {"omit_usage": True, "profile": "default"}
+        for invocation in get.call_args_list
+    )
 
 
 def test_malformed_image_response_fails_without_mutation(monkeypatch):

@@ -32,6 +32,7 @@ _RESERVED_OPTIONS = frozenset(
 
 
 def _pool_name(value, label="pool_name"):
+    """Validate and return a pool name."""
     if (
         not isinstance(value, str)
         or len(value) > 255
@@ -71,6 +72,7 @@ def _boolean(value, label, optional=True):
 
 
 def _name(value, label, optional=True):
+    """Validate and return an optional identifier."""
     if value is None and optional:
         return None
     return validation.identifier(value, label)
@@ -92,6 +94,7 @@ def _string_list(values, label, *, pattern, allow_empty=False):
 
 
 def _flags(values):
+    """Validate and normalize pool flags."""
     normalized = _string_list(values, "flags", pattern=validation.IDENTIFIER_PATTERN)
     if normalized is not None and not set(normalized).issubset(POOL_FLAGS):
         raise ConfigurationError("flags contains an unsupported value.")
@@ -99,6 +102,7 @@ def _flags(values):
 
 
 def _applications(values):
+    """Validate and normalize pool application metadata names."""
     return _string_list(
         values,
         "application_metadata",
@@ -125,6 +129,7 @@ def _scalar(value, label, *, allow_none=False):
 
 
 def _options(values, *, reserved=()):
+    """Validate and normalize mutable pool options."""
     if values is None:
         return {}
     if not isinstance(values, Mapping):
@@ -141,6 +146,7 @@ def _options(values, *, reserved=()):
 
 
 def _configuration(values):
+    """Validate and normalize per-pool RBD configuration."""
     if values is None:
         return None
     if not isinstance(values, Mapping):

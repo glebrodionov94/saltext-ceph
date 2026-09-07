@@ -18,6 +18,7 @@ _SORT_PATTERN = re.compile(r"[+-]?(?:service_name|status\.(?:running|last_refres
 
 
 def _service_name(value, label="service_name"):
+    """Validate and return an orchestrator service name."""
     return validation.identifier(value, label)
 
 
@@ -51,6 +52,7 @@ def _json_value(value, label, depth=0):
 
 
 def _service_spec(value, service_name):
+    """Validate and normalize a ServiceSpec for the named service."""
     if not isinstance(value, Mapping) or not value:
         raise ConfigurationError("service_spec must be a non-empty mapping.")
     spec = _json_value(value, "service_spec")

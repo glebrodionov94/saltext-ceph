@@ -22,30 +22,37 @@ def _secret(source, label):
 
 
 def list_clusters(opts, pillar, context, profile="default"):
+    """List SMB clusters."""
     return _call(smb.list_clusters, opts, pillar, context, profile)
 
 
 def get_cluster(opts, pillar, context, cluster_id, profile="default"):
+    """Return one SMB cluster."""
     return _call(smb.get_cluster, opts, pillar, context, profile, cluster_id)
 
 
 def create_cluster(opts, pillar, context, resource, profile="default"):
+    """Create an SMB cluster from a cluster resource."""
     return _call(smb.create_cluster, opts, pillar, context, profile, resource)
 
 
 def delete_cluster(opts, pillar, context, cluster_id, confirm=False, profile="default"):
+    """Delete an SMB cluster after explicit confirmation."""
     return _call(smb.delete_cluster, opts, pillar, context, profile, cluster_id, confirm)
 
 
 def list_shares(opts, pillar, context, cluster_id=None, profile="default"):
+    """List SMB shares, optionally for one cluster."""
     return _call(smb.list_shares, opts, pillar, context, profile, cluster_id)
 
 
 def get_share(opts, pillar, context, cluster_id, share_id, profile="default"):
+    """Return one SMB share."""
     return _call(smb.get_share, opts, pillar, context, profile, cluster_id, share_id)
 
 
 def create_share(opts, pillar, context, resource, profile="default"):
+    """Create an SMB share from a share resource."""
     return _call(smb.create_share, opts, pillar, context, profile, resource)
 
 
@@ -63,6 +70,7 @@ def update_share_qos(
     write_delay_max=None,
     profile="default",
 ):
+    """Update explicitly supplied QoS limits for an SMB share."""
     limits = {
         key: value
         for key, value in {
@@ -96,6 +104,7 @@ def delete_share(
     confirm=False,
     profile="default",
 ):
+    """Delete an SMB share after explicit confirmation."""
     return _call(
         smb.delete_share,
         opts,
@@ -109,10 +118,12 @@ def delete_share(
 
 
 def list_join_auths(opts, pillar, context, profile="default"):
+    """List SMB join-auth resources."""
     return _call(smb.list_join_auths, opts, pillar, context, profile)
 
 
 def get_join_auth(opts, pillar, context, auth_id, profile="default"):
+    """Return one SMB join-auth resource."""
     return _call(smb.get_join_auth, opts, pillar, context, profile, auth_id)
 
 
@@ -126,6 +137,7 @@ def create_join_auth(
     linked_to_cluster=None,
     profile="default",
 ):
+    """Create an SMB join-auth resource using a password file."""
     return _call(
         smb.create_join_auth,
         opts,
@@ -140,14 +152,17 @@ def create_join_auth(
 
 
 def delete_join_auth(opts, pillar, context, auth_id, confirm=False, profile="default"):
+    """Delete an SMB join-auth resource after explicit confirmation."""
     return _call(smb.delete_join_auth, opts, pillar, context, profile, auth_id, confirm)
 
 
 def list_usersgroups(opts, pillar, context, profile="default"):
+    """List SMB users/groups resources."""
     return _call(smb.list_usersgroups, opts, pillar, context, profile)
 
 
 def get_usersgroups(opts, pillar, context, users_groups_id, profile="default"):
+    """Return one SMB users/groups resource."""
     return _call(smb.get_usersgroups, opts, pillar, context, profile, users_groups_id)
 
 
@@ -160,6 +175,7 @@ def create_usersgroups(
     linked_to_cluster=None,
     profile="default",
 ):
+    """Create an SMB users/groups resource from a JSON file."""
     try:
         values = json.loads(secret_file.read(source))
     except json.JSONDecodeError:
@@ -186,6 +202,7 @@ def delete_usersgroups(
     confirm=False,
     profile="default",
 ):
+    """Delete an SMB users/groups resource after explicit confirmation."""
     return _call(
         smb.delete_usersgroups,
         opts,

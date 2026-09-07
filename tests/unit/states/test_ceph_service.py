@@ -51,6 +51,66 @@ def test_present_is_idempotent_and_ignores_status(monkeypatch):
     salt["ceph_service.update"].assert_not_called()
 
 
+def test_present_treats_omitted_false_and_empty_defaults_as_current(monkeypatch):
+    desired = {
+        **SPEC,
+        "unmanaged": False,
+        "networks": [],
+        "spec": {"disable_multisite_sync_traffic": False},
+    }
+    observed = resource({**SPEC, "spec": {}})
+    salt = {
+        "ceph_service.list": Mock(return_value=envelope([observed])),
+        "ceph_service.get": Mock(return_value=envelope(observed)),
+        "ceph_service.update": Mock(),
+    }
+    monkeypatch.setattr(state, "__salt__", salt)
+
+    result = state.present("rgw.realm.zone", desired)
+
+    assert result["result"] is True
+    assert not result["changes"]
+    salt["ceph_service.update"].assert_not_called()
+
+
+def test_present_projects_service_specific_fields_from_dashboard_spec(monkeypatch):
+    desired = {
+        "service_type": "osd",
+        "service_id": "saltext-ci-data",
+        "placement": {"hosts": ["node-1"]},
+        "data_devices": {"paths": ["/dev/sdb"]},
+        "encrypted": False,
+    }
+    observed = {
+        "service_name": "osd.saltext-ci-data",
+        "service_type": "osd",
+        "service_id": "saltext-ci-data",
+        "placement": {"hosts": ["node-1"]},
+        "spec": {
+            "data_devices": {"paths": ["/dev/sdb"]},
+            "filter_logic": "AND",
+            "objectstore": "bluestore",
+        },
+        "status": {"running": 1},
+    }
+    update = Mock()
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {
+            "ceph_service.list": Mock(return_value=envelope([observed])),
+            "ceph_service.get": Mock(return_value=envelope(observed)),
+            "ceph_service.update": update,
+        },
+    )
+
+    result = state.present("osd.saltext-ci-data", desired)
+
+    assert result["result"] is True
+    assert not result["changes"]
+    update.assert_not_called()
+
+
 def test_present_plans_create_in_test_mode(monkeypatch):
     monkeypatch.setattr(state, "__opts__", {"test": True})
     create = Mock()
@@ -105,8 +165,46 @@ def test_present_updates_only_when_managed_spec_differs(monkeypatch):
     update.assert_called_once()
 
 
+def test_present_polls_stale_service_cache_and_accepts_omitted_false(monkeypatch):
+    desired = {**SPEC, "unmanaged": False}
+    before = resource({**SPEC, "unmanaged": True})
+    after = resource()
+    list_ = Mock(
+        side_effect=[
+            envelope([before]),
+            envelope([before]),
+            envelope([after]),
+        ]
+    )
+    get = Mock(side_effect=[envelope(before), envelope(before), envelope(after)])
+    update = Mock(return_value=envelope(status=201))
+    sleep = Mock()
+    monkeypatch.setattr(state.reconcile.time, "monotonic", Mock(side_effect=[0.0, 0.0]))
+    monkeypatch.setattr(state.reconcile.time, "sleep", sleep)
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {"ceph_service.list": list_, "ceph_service.get": get, "ceph_service.update": update},
+    )
+
+    result = state.present(
+        "rgw.realm.zone",
+        desired,
+        task_timeout=5,
+        task_interval=1,
+    )
+
+    assert result["result"] is True
+    assert result["changes"] == {
+        "old": {**SPEC, "unmanaged": True},
+        "new": desired,
+    }
+    sleep.assert_called_once_with(1.0)
+
+
 def test_present_reports_failed_post_read(monkeypatch):
     before = resource({**SPEC, "placement": {"count": 1, "label": "rgw"}})
+    monkeypatch.setattr(state.reconcile.time, "monotonic", Mock(side_effect=[0.0, 1.0]))
     monkeypatch.setattr(
         state,
         "__salt__",
@@ -116,7 +214,7 @@ def test_present_reports_failed_post_read(monkeypatch):
             "ceph_service.update": Mock(return_value=envelope(status=201)),
         },
     )
-    result = state.present("rgw.realm.zone", SPEC)
+    result = state.present("rgw.realm.zone", SPEC, task_timeout=0.5, task_interval=0.1)
     assert result["result"] is False
     assert "did not converge" in result["comment"]
 
@@ -151,6 +249,41 @@ def test_absent_deletes_and_verifies(monkeypatch):
     result = state.absent("rgw.realm.zone", confirm=True)
     assert result["result"] is True
     delete.assert_called_once_with("rgw.realm.zone", confirm=True, profile="default")
+
+
+def test_absent_polls_until_stale_service_disappears(monkeypatch):
+    existing = resource()
+    list_ = Mock(
+        side_effect=[
+            envelope([existing]),
+            envelope([existing]),
+            envelope([]),
+        ]
+    )
+    get = Mock(side_effect=[envelope(existing), envelope(existing)])
+    sleep = Mock()
+    monkeypatch.setattr(state.reconcile.time, "monotonic", Mock(side_effect=[0.0, 0.0]))
+    monkeypatch.setattr(state.reconcile.time, "sleep", sleep)
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {
+            "ceph_service.list": list_,
+            "ceph_service.get": get,
+            "ceph_service.delete": Mock(return_value=envelope(status=204)),
+        },
+    )
+
+    result = state.absent(
+        "rgw.realm.zone",
+        confirm=True,
+        task_timeout=5,
+        task_interval=1,
+    )
+
+    assert result["result"] is True
+    assert result["changes"]["new"] is None
+    sleep.assert_called_once_with(1.0)
 
 
 def test_absent_protects_core_services(monkeypatch):

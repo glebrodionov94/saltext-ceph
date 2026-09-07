@@ -95,6 +95,63 @@ def test_wait_if_accepted_rejects_invalid_or_unsupported_tasks(response, salt, e
         reconcile.wait_if_accepted(salt, response)
 
 
+def test_wait_for_convergence_polls_until_predicate_matches(monkeypatch):
+    read = Mock(side_effect=[{"ready": False}, {"ready": True}])
+    sleep = Mock()
+    monkeypatch.setattr(reconcile.time, "monotonic", Mock(side_effect=[10.0, 10.25]))
+    monkeypatch.setattr(reconcile.time, "sleep", sleep)
+
+    result = reconcile.wait_for_convergence(
+        read,
+        lambda value: value["ready"],
+        timeout=5,
+        interval=1,
+    )
+
+    assert result == {"ready": True}
+    assert read.call_count == 2
+    sleep.assert_called_once_with(1.0)
+
+
+def test_wait_for_convergence_uses_remaining_time_and_fails_safely(monkeypatch):
+    read = Mock(return_value=None)
+    sleep = Mock()
+    monkeypatch.setattr(
+        reconcile.time,
+        "monotonic",
+        Mock(side_effect=[10.0, 10.75, 11.0]),
+    )
+    monkeypatch.setattr(reconcile.time, "sleep", sleep)
+
+    with pytest.raises(ProtocolError, match="service still exists"):
+        reconcile.wait_for_convergence(
+            read,
+            lambda value: value is not None,
+            timeout=1,
+            interval=0.5,
+            timeout_message="service still exists",
+        )
+
+    assert read.call_count == 2
+    sleep.assert_called_once_with(0.25)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"timeout": True},
+        {"timeout": 0},
+        {"timeout": 86401},
+        {"interval": float("nan")},
+        {"interval": 61},
+        {"timeout_message": ""},
+    ],
+)
+def test_wait_for_convergence_rejects_invalid_policy(kwargs):
+    with pytest.raises(ConfigurationError):
+        reconcile.wait_for_convergence(lambda: None, lambda value: False, **kwargs)
+
+
 def test_project_compares_only_managed_nested_fields():
     current = {"name": "x", "placement": {"count": 2, "hosts": ["a"]}, "status": {}}
     desired = {"name": "x", "placement": {"count": 2}}

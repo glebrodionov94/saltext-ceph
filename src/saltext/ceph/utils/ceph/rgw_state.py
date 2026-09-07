@@ -16,6 +16,12 @@ RATE_FIELDS = (
     "max_write_bytes",
 )
 
+_VERSIONING_STATUSES = {
+    "enabled": "Enabled",
+    "suspended": "Suspended",
+    "off": "Off",
+}
+
 
 def mapping(value, label):
     """Return a detached response mapping or raise a protocol error."""
@@ -90,6 +96,23 @@ def response_bool(value, label):
     if isinstance(value, str) and value.casefold() in ("true", "false"):
         return value.casefold() == "true"
     raise ProtocolError(f"RGW response field {label} is not a boolean.")
+
+
+def versioning_status(value):
+    """Normalize versioning status returned by supported Dashboard releases.
+
+    Reef reports a bucket that has never enabled versioning as ``Suspended``.
+    Newer Dashboard releases preserve that distinct state as ``Off``.  Both are
+    readable current states, while writes remain limited to the S3 values
+    ``Enabled`` and ``Suspended``.
+    """
+    if isinstance(value, Mapping):
+        value = value.get("Status", value.get("status"))
+    if isinstance(value, str):
+        normalized = _VERSIONING_STATUSES.get(value.strip().casefold())
+        if normalized is not None:
+            return normalized
+    raise ProtocolError("RGW bucket read omitted a usable versioning status.")
 
 
 def integer_or_none(value, label, *, non_negative=False):

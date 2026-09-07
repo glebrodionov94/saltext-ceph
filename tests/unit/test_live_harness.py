@@ -5,6 +5,9 @@ import pytest
 
 from tests.integration import _live
 from tests.integration import conftest as live_conftest
+from tests.integration.modules import test_live_cephadm as live_cephadm_tests
+from tests.integration.modules import test_live_core as live_core_tests
+from tests.integration.modules import test_live_storage as live_storage_tests
 
 FSID = "11111111-2222-4333-8444-555555555555"
 RUN_UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
@@ -302,10 +305,10 @@ def test_user_guard_does_not_disclose_rejected_password():
     transport.request.assert_not_called()
 
 
-def test_destructive_guard_fails_closed_after_allowlist_validation():
+def test_destructive_guard_fails_closed_without_an_active_lease():
     client, transport = _guard("destructive")
 
-    with pytest.raises(_live.LiveConfigurationError, match="No destructive"):
+    with pytest.raises(_live.LiveConfigurationError, match="no active infrastructure lease"):
         client.request(
             "DELETE",
             "/api/pool/saltext-live",
@@ -337,6 +340,86 @@ class _FakeItem:
 
     def iter_markers(self, name):
         return (marker for marker in reversed(self.markers) if marker.name == name)
+
+
+def _feature_marker_names(function):
+    return {
+        name
+        for marker in getattr(function, "pytestmark", ())
+        if marker.name == "ceph_live_feature"
+        for name in marker.args
+    }
+
+
+@pytest.mark.parametrize(
+    "function,expected",
+    (
+        (live_core_tests.test_live_current_health_snapshot_mapping_contract, {"health_snapshot"}),
+        (live_cephadm_tests.test_live_host_inventory_has_stable_identities, {"orchestrator"}),
+        (live_cephadm_tests.test_live_first_host_read_subresources, {"orchestrator"}),
+        (live_cephadm_tests.test_live_service_types_cover_reported_services, {"orchestrator"}),
+        (live_cephadm_tests.test_live_first_service_and_its_daemons, {"orchestrator"}),
+        (live_cephadm_tests.test_live_daemon_filter_preserves_requested_type, {"orchestrator"}),
+        (live_cephadm_tests.test_live_upgrade_status, {"orchestrator"}),
+        (
+            live_cephadm_tests.test_live_current_hardware_status,
+            {"orchestrator", "hardware"},
+        ),
+        (live_cephadm_tests.test_salt_loader_executes_a_live_cephadm_module, {"orchestrator"}),
+        (live_storage_tests.test_live_optional_cephfs_inventory, {"cephfs"}),
+        (live_storage_tests.test_live_optional_rbd_defaults, {"rbd"}),
+    ),
+)
+def test_optional_live_module_calls_have_explicit_feature_gates(function, expected):
+    assert _feature_marker_names(function) == expected
+
+
+def test_feature_requirements_combine_live_and_specific_markers():
+    item = _FakeItem(
+        "tests/integration/modules/test_live_example.py",
+        pytest.mark.ceph_live(features="orchestrator").mark,
+        pytest.mark.ceph_live_feature("health_snapshot", "hardware").mark,
+    )
+
+    assert live_conftest._required_features(item) == (
+        "orchestrator",
+        "health_snapshot",
+        "hardware",
+    )
+
+
+def test_missing_live_feature_skips_before_the_test_body():
+    item = _FakeItem(
+        "tests/integration/modules/test_live_example.py",
+        pytest.mark.ceph_live.mark,
+        pytest.mark.ceph_live_feature("hardware").mark,
+    )
+    settings = Mock()
+    settings.require_features.return_value = {"hardware"}
+    request = Mock(node=item)
+    request.getfixturevalue.return_value = settings
+
+    with pytest.raises(pytest.skip.Exception, match="hardware"):
+        live_conftest._enforce_live_requirements.__wrapped__(request)
+
+    settings.require_features.assert_called_once_with("hardware")
+
+
+def test_up_osd_selection_understands_dashboard_state_shapes():
+    select = live_storage_tests.live_up_osd_id.__wrapped__
+
+    assert (
+        select(
+            [
+                {"id": 1, "state": ["exists", "down"]},
+                {"id": 2, "state": ["exists", "up"]},
+            ]
+        )
+        == 2
+    )
+    assert select([{"id": 3, "up": 1}]) == 3
+    with pytest.raises(pytest.skip.Exception, match="no up OSDs"):
+        select([{"id": 4, "state": ["exists", "down"]}])
 
 
 def test_pytest_live_mode_forces_showlocals_off():

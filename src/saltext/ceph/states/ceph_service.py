@@ -14,6 +14,7 @@ from saltext.ceph.utils.ceph.errors import ProtocolError
 __virtualname__ = "ceph_service"
 _ERRORS = (CephError, CommandExecutionError, SaltInvocationError)
 _CORE_SERVICES = frozenset(("mon", "mgr"))
+_MISSING = object()
 
 
 def __virtual__():
@@ -48,6 +49,29 @@ def _current(name, profile):
     return dict(value)
 
 
+def _project_service_spec(current, desired):
+    """Project a ServiceSpec while honoring fields Ceph omits at default values."""
+    projected = {}
+    nested_spec = current.get("spec")
+    for key, wanted in desired.items():
+        actual = current.get(key, _MISSING)
+        # Dashboard's orchestrator read model keeps common ServiceSpec fields
+        # at the top level and nests service-specific fields under ``spec``.
+        # Mutating endpoints still expect one flat ServiceSpec.
+        if actual is _MISSING and key != "spec" and isinstance(nested_spec, Mapping):
+            actual = nested_spec.get(key, _MISSING)
+        if isinstance(wanted, Mapping) and isinstance(actual, Mapping):
+            projected[key] = _project_service_spec(actual, wanted)
+        elif isinstance(wanted, Mapping) and actual is _MISSING:
+            projected[key] = _project_service_spec({}, wanted)
+        elif actual is _MISSING:
+            # ServiceSpec.to_json() omits false, zero, null and empty values.
+            projected[key] = wanted if not wanted else None
+        else:
+            projected[key] = actual
+    return projected
+
+
 def present(
     name,
     service_spec,
@@ -61,7 +85,7 @@ def present(
         name = service.validate_service_name(name)
         desired = service.validate_service_spec(service_spec, name)
         current = _current(name, profile)
-        old = None if current is None else reconcile.project(current, desired)
+        old = None if current is None else _project_service_spec(current, desired)
         if old == desired:
             return reconcile.no_change(ret, f"Ceph service {name} is already current.")
         if __opts__.get("test", False):
@@ -75,12 +99,15 @@ def present(
             timeout=task_timeout,
             interval=task_interval,
         )
-        after_resource = _current(name, profile)
-        if after_resource is None:
-            raise ProtocolError(f"Ceph service {name} was not visible after mutation.")
-        after = reconcile.project(after_resource, desired)
-        if after != desired:
-            raise ProtocolError(f"Ceph service {name} did not converge after mutation.")
+        after_resource = reconcile.wait_for_convergence(
+            lambda: _current(name, profile),
+            lambda observed: observed is not None
+            and _project_service_spec(observed, desired) == desired,
+            timeout=task_timeout,
+            interval=task_interval,
+            timeout_message=f"Ceph service {name} did not converge after mutation.",
+        )
+        after = _project_service_spec(after_resource, desired)
         return reconcile.changed(ret, old, after, f"Ceph service {name} was reconciled.")
     except _ERRORS as exc:
         return reconcile.failed(ret, exc)
@@ -120,8 +147,13 @@ def absent(
             timeout=task_timeout,
             interval=task_interval,
         )
-        if _current(name, profile) is not None:
-            raise ProtocolError(f"Ceph service {name} still exists after deletion.")
+        reconcile.wait_for_convergence(
+            lambda: _current(name, profile),
+            lambda observed: observed is None,
+            timeout=task_timeout,
+            interval=task_interval,
+            timeout_message=f"Ceph service {name} still exists after deletion.",
+        )
         return reconcile.changed(ret, current, None, f"Ceph service {name} was deleted.")
     except _ERRORS as exc:
         return reconcile.failed(ret, exc)

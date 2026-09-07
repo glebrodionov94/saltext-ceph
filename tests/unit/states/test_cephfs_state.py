@@ -19,6 +19,10 @@ def filesystem():
     return {"id": 1, "mdsmap": {"fs_name": "archive"}}
 
 
+def mds_daemon(name="mds.archive.node1.abcd"):
+    return {"daemon_type": "mds", "daemon_name": name}
+
+
 def directory(path="/data", snapshots=None, max_bytes=0, max_files=0):
     return {
         "name": path.rsplit("/", 1)[-1] or "/",
@@ -144,16 +148,97 @@ def test_filesystem_absent_waits_and_verifies_removal(monkeypatch):
     listing = Mock(side_effect=[envelope([filesystem()]), envelope([])])
     remove = Mock(return_value=task("cephfs/remove"))
     wait = Mock(return_value=envelope({"success": True}))
+    daemons = Mock(return_value=envelope([]))
     monkeypatch.setattr(
         state,
         "__salt__",
-        {"cephfs.list": listing, "cephfs.remove": remove, "ceph_task.wait": wait},
+        {
+            "cephfs.list": listing,
+            "cephfs.remove": remove,
+            "ceph_service.daemons": daemons,
+            "ceph_task.wait": wait,
+        },
     )
     result = state.filesystem_absent("archive", confirm=True)
     assert result["result"] is True
     assert result["changes"]["new"] is None
     remove.assert_called_once_with("archive", confirm=True, profile="default")
+    daemons.assert_called_once_with("mds.archive", profile="default")
     wait.assert_called_once()
+
+
+def test_filesystem_absent_waits_for_stale_mds_daemon_cache(monkeypatch):
+    listing = Mock(
+        side_effect=[
+            envelope([filesystem()]),
+            envelope([]),
+            envelope([]),
+        ]
+    )
+    daemons = Mock(side_effect=[envelope([mds_daemon()]), envelope([])])
+    sleep = Mock()
+    monkeypatch.setattr(state.reconcile.time, "monotonic", Mock(side_effect=[0.0, 0.0]))
+    monkeypatch.setattr(state.reconcile.time, "sleep", sleep)
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {
+            "cephfs.list": listing,
+            "cephfs.remove": Mock(return_value=envelope(status=204)),
+            "ceph_service.daemons": daemons,
+        },
+    )
+
+    result = state.filesystem_absent(
+        "archive",
+        confirm=True,
+        task_timeout=5,
+        task_interval=1,
+    )
+
+    assert result["result"] is True
+    assert result["changes"] == {"old": {"filesystem": "archive"}, "new": None}
+    sleep.assert_called_once_with(1.0)
+
+
+def test_filesystem_absent_rechecks_orphaned_mds_daemons_on_idempotent_run(monkeypatch):
+    daemons = Mock(side_effect=[envelope([mds_daemon()]), envelope([])])
+    sleep = Mock()
+    monkeypatch.setattr(state.reconcile.time, "monotonic", Mock(side_effect=[0.0, 0.0]))
+    monkeypatch.setattr(state.reconcile.time, "sleep", sleep)
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {
+            "cephfs.list": Mock(return_value=envelope([])),
+            "ceph_service.daemons": daemons,
+        },
+    )
+
+    result = state.filesystem_absent("archive", task_timeout=5, task_interval=1)
+
+    assert result["result"] is True
+    assert not result["changes"]
+    assert daemons.call_count == 2
+    sleep.assert_not_called()
+
+
+def test_filesystem_absent_test_mode_reports_pending_mds_daemon_convergence(monkeypatch):
+    monkeypatch.setattr(state, "__opts__", {"test": True})
+    monkeypatch.setattr(
+        state,
+        "__salt__",
+        {
+            "cephfs.list": Mock(return_value=envelope([])),
+            "ceph_service.daemons": Mock(return_value=envelope([mds_daemon()])),
+        },
+    )
+
+    result = state.filesystem_absent("archive")
+
+    assert result["result"] is None
+    assert result["changes"] == {"old": {"mds_daemons": ["mds.archive.node1.abcd"]}, "new": None}
+    assert "would be awaited" in result["comment"]
 
 
 def test_filesystem_async_without_waiter_fails_without_claiming_change(monkeypatch):

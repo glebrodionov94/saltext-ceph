@@ -1,54 +1,52 @@
 ---
 name: Publish Documentation
 
-on:
-  workflow_call:
-    inputs:
-      # This is the name of the regular artifact that should
-      # be transformed into a GitHub Pages deployment.
-      artifact-name:
-        type: string
-        required: false
-        default: html-docs
-
+on:  # zizmor: ignore[dangerous-triggers] restricted to validated same-repository release runs
+  workflow_run:
+    types:
+      - completed
+    workflows:
+      - Auto PR Releases
+      - Tagged Releases
 
 permissions: {}
 
+concurrency:
+  group: saltext-ceph-docs-release
+  cancel-in-progress: false
+
 jobs:
-
-  # The released docs are not versioned currently, only the latest ones are deployed.
-  #
-  # Versioning support would require either (better):
-  #   * Rebuilding docs for all versions when a new release is made
-  #   * Version selector support in `furo`: https://github.com/pradyunsg/furo/pull/500
-  #
-  # or (more basic):
-  #   * using the `gh-pages` branch and peaceiris/actions-gh-pages
-  #     to be able to deploy to subdirectories. The implementation via
-  #     actions/deploy-pages always replaces the directory root.
-
-  Deploy-Docs-GH-Pages:
+  deploy_docs:
     name: Publish Docs to GitHub Pages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: >-
+      vars.CEPH_RELEASES_ENABLED == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (
+        (github.event.workflow_run.name == 'Tagged Releases' &&
+         github.event.workflow_run.event == 'push') ||
+        (github.event.workflow_run.name == 'Auto PR Releases' &&
+         github.event.workflow_run.event == 'pull_request')
+      )
     permissions:
-      actions: read  # Download the documentation artifact from the producing run.
-      pages: write  # Publish to the repository's GitHub Pages site.
-      id-token: write  # Authenticate the Pages deployment with GitHub OIDC.
+      actions: read
+      pages: write
+      id-token: write
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
-    runs-on: ubuntu-24.04
-
     steps:
-
-      - name: Download built docs
+      - name: Download documentation from the successful release run
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
-          name: ${{ inputs.artifact-name }}
+          name: html-docs
           path: html-docs
           github-token: ${{ github.token }}
-          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.run_id }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
@@ -61,18 +59,3 @@ jobs:
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128  # v5.0.0
         with:
           artifact_name: html-docs-pages
-
-      - name: Delete GitHub Pages artifact
-        if: always()
-        uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118  # v6.0.0
-        with:
-          name: html-docs-pages
-          failOnError: false
-
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Upload Exit Status
-        if: always()
-        uses: ./.github/actions/upload-exitstatus

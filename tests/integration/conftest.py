@@ -157,7 +157,15 @@ def _enforce_live_requirements(request):
         )
     try:
         if level == "destructive":
-            settings.require_destructive(*_destructive_resources(request.node))
+            resources = _destructive_resources(request.node)
+            if resources:
+                settings.require_destructive(*resources)
+            else:
+                # Dynamic resources (for example an OSD ID allocated by Ceph)
+                # are checked when the test opens its exact infrastructure
+                # lease.  The gate and non-empty global allowlist were already
+                # validated while loading the session settings.
+                settings.require_destructive_gate()
         elif level == "mutate":
             settings.require_mutation()
     except LiveConfigurationError as exc:

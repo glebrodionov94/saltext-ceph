@@ -47,7 +47,7 @@ def create_bucket(
     lock_mode=None,
     lock_retention_period_days=None,
     lock_retention_period_years=None,
-    encryption_state=None,
+    encryption_state=False,
     encryption_type=None,
     key_id=None,
     tags=None,

@@ -29,12 +29,14 @@ def _uuid(value):
 
 
 def peer_list(client, filesystem):
+    """List snapshot mirror peers for a CephFS filesystem."""
     return client.request(
         "GET", f"{RESOURCE_PATH}/{_fs(filesystem, route=True)}", api_version=API_VERSION
     )
 
 
 def enable(client, filesystem):
+    """Enable snapshot mirroring for a CephFS filesystem."""
     return client.request(
         "POST",
         f"{RESOURCE_PATH}/enable",
@@ -44,6 +46,7 @@ def enable(client, filesystem):
 
 
 def disable(client, filesystem, confirm=False):
+    """Disable CephFS snapshot mirroring after explicit confirmation."""
     cephfs.confirmed(confirm, "Disabling CephFS snapshot mirroring")
     return client.request(
         "POST",
@@ -54,6 +57,7 @@ def disable(client, filesystem, confirm=False):
 
 
 def create_token(client, filesystem, client_name, site_name):
+    """Create a bootstrap token for a CephFS snapshot mirror peer."""
     data = {
         "fs_name": _fs(filesystem),
         "client_name": validate_entity(client_name),
@@ -70,6 +74,7 @@ def create_token(client, filesystem, client_name, site_name):
 
 
 def add_peer(client, filesystem, token):
+    """Add a CephFS snapshot mirror peer from a bootstrap token."""
     if not isinstance(token, str) or not token.strip() or "\x00" in token:
         raise ConfigurationError("The bootstrap token file is empty or invalid.")
     return client.request(
@@ -81,6 +86,7 @@ def add_peer(client, filesystem, token):
 
 
 def remove_peer(client, filesystem, peer_uuid, confirm=False):
+    """Remove a CephFS snapshot mirror peer after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS mirror peer")
     filesystem = _fs(filesystem, route=True)
     return client.request(
@@ -89,11 +95,13 @@ def remove_peer(client, filesystem, peer_uuid, confirm=False):
 
 
 def add_directory(client, filesystem, path):
+    """Add a CephFS directory to snapshot mirroring."""
     data = {"fs_name": _fs(filesystem), "path": cephfs.filesystem_path(path)}
     return client.request("POST", f"{RESOURCE_PATH}/directory", api_version=API_VERSION, data=data)
 
 
 def remove_directory(client, filesystem, path, confirm=False):
+    """Remove a directory from snapshot mirroring after confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS mirrored directory")
     params = {"fs_name": _fs(filesystem), "path": cephfs.filesystem_path(path)}
     return client.request(
@@ -102,6 +110,7 @@ def remove_directory(client, filesystem, path, confirm=False):
 
 
 def directory_list(client, filesystem):
+    """List directories mirrored for a CephFS filesystem."""
     return client.request(
         "GET",
         f"{RESOURCE_PATH}/directory/{_fs(filesystem, route=True)}",
@@ -110,6 +119,7 @@ def directory_list(client, filesystem):
 
 
 def checkpoint_list(client, filesystem, path):
+    """List mirror checkpoints for a CephFS directory."""
     filesystem = _fs(filesystem, route=True)
     return client.request(
         "GET",
@@ -120,6 +130,7 @@ def checkpoint_list(client, filesystem, path):
 
 
 def add_checkpoint(client, filesystem, path, snapshot):
+    """Add a named mirror checkpoint for a CephFS directory."""
     filesystem = _fs(filesystem, route=True)
     data = {
         "path": cephfs.filesystem_path(path),
@@ -134,6 +145,7 @@ def add_checkpoint(client, filesystem, path, snapshot):
 
 
 def checkpoint_now(client, filesystem, path):
+    """Create an immediate mirror checkpoint for a CephFS directory."""
     filesystem = _fs(filesystem, route=True)
     return client.request(
         "POST",
@@ -144,6 +156,7 @@ def checkpoint_now(client, filesystem, path):
 
 
 def remove_checkpoint(client, filesystem, path, snapshot, confirm=False):
+    """Remove a CephFS mirror checkpoint after explicit confirmation."""
     cephfs.confirmed(confirm, "Removing a CephFS mirror checkpoint")
     filesystem = _fs(filesystem, route=True)
     params = {
@@ -159,10 +172,12 @@ def remove_checkpoint(client, filesystem, path, snapshot, confirm=False):
 
 
 def daemon_status(client):
+    """Get CephFS snapshot mirror daemon status."""
     return client.request("GET", f"{RESOURCE_PATH}/daemon/status", api_version=API_VERSION)
 
 
 def status(client, filesystem, path=None, peer_uuid=None):
+    """Get snapshot mirror status, optionally scoped by path or peer."""
     filesystem = _fs(filesystem, route=True)
     params = cephfs.optional_params(
         path=None if path in (None, "") else cephfs.filesystem_path(path),

@@ -1,5 +1,6 @@
 """Pure helpers shared by declarative Ceph state modules."""
 
+import time
 from collections.abc import Mapping
 
 from saltext.ceph.utils.ceph.errors import ConfigurationError
@@ -64,6 +65,43 @@ def wait_if_accepted(
         ),
         "Ceph task wait",
     )
+
+
+def wait_for_convergence(
+    read,
+    converged,
+    *,
+    timeout=300.0,
+    interval=2.0,
+    timeout_message="Ceph resource did not converge before timeout.",
+):
+    """Poll an eventually consistent read until its declared state is visible."""
+    for label, value, maximum in (
+        ("timeout", timeout, 86400),
+        ("interval", interval, 60),
+    ):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not 0 < float(value) <= maximum
+        ):
+            raise ConfigurationError(
+                f"{label} must be a positive number no greater than {maximum}."
+            )
+    if not callable(read) or not callable(converged):
+        raise ConfigurationError("Convergence read and predicate must be callable.")
+    if not isinstance(timeout_message, str) or not timeout_message:
+        raise ConfigurationError("Convergence timeout message must be a non-empty string.")
+
+    deadline = time.monotonic() + float(timeout)
+    while True:
+        value = read()
+        if converged(value):
+            return value
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProtocolError(timeout_message)
+        time.sleep(min(float(interval), remaining))
 
 
 def project(current, desired):

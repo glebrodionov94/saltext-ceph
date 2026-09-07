@@ -1,0 +1,1 @@
+Poll Dashboard after pool mutations and reconcile one mutable post-create drift so eventually consistent create, update, and delete operations converge within the state's declared task timeout.
