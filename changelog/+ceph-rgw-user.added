@@ -1,1 +1,0 @@
-Add RGW user, capability, key, quota, subuser, and rate-limit operations with file-sourced credentials and secret redaction.

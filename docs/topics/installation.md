@@ -5,8 +5,17 @@ that calls Ceph Dashboard. One control minion, one masterless node, or the
 salt-ssh controller is sufficient for a cluster. API-based management does not
 require a Salt minion on every Ceph host.
 
-The project has not published its first PyPI release. Install a local checkout or
-a wheel built from a reviewed revision.
+Install the published package in the Python environment used by Salt:
+
+```console
+salt-pip install saltext.ceph
+```
+
+With a classic Salt installation, use its Python interpreter instead:
+
+```console
+python -m pip install saltext.ceph
+```
 
 ## Development checkout
 

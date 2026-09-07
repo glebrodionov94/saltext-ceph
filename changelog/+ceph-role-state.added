@@ -1,2 +1,0 @@
-Add idempotent Dashboard role states with exact permission reconciliation,
-built-in role protection, asynchronous task waiting, and confirmed deletion.

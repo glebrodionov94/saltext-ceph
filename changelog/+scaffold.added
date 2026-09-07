@@ -1,2 +1,0 @@
-Initialize the Ceph REST API extension scaffold with packaging, Salt loader
-registration, test fixtures, documentation, and CI.

@@ -1,2 +1,0 @@
-Add declarative CephFS states for filesystems, directories, snapshots,
-subvolumes, groups, snapshot schedules, and snapshot-mirroring peers and paths.

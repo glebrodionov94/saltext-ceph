@@ -1,3 +1,0 @@
-Add declarative RBD image, namespace, and snapshot states with exact observable
-projections, test mode, asynchronous task waits, post-read verification, and
-confirmation guards for destructive changes.

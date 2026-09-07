@@ -1,2 +1,0 @@
-Add current-Ceph RBD group, exact membership, and group-snapshot existence
-states with test mode, task waits, verification, and destructive guards.

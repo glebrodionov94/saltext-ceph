@@ -77,8 +77,8 @@ def test_release_uses_only_trusted_publishing():
     assert "password:" not in release
     assert "PYPI_API_TOKEN" not in release
     assert "TEST_PYPI_API_TOKEN" not in release
-    assert release.count("id-token: write") == 2
-    assert "name: testpypi" in release
+    assert release.count("id-token: write") == 1
+    assert "name: testpypi" not in release
     assert "name: release" in release
     assert "github.event.workflow_run.head_repository.full_name == github.repository" in release
     assert "vars.CEPH_RELEASES_ENABLED == 'true'" in release

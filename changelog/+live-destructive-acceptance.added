@@ -1,2 +1,0 @@
-Add fail-closed, opt-in live acceptance lifecycles for cephadm hosts and
-services, exact-device OSD provisioning, RBD, CephFS, and RGW resources.

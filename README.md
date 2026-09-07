@@ -6,8 +6,8 @@ calculates drift, invokes cephadm through Dashboard, and verifies the result.
 This makes the extension suitable for reviewed GitOps and Infrastructure as Code
 workflows without installing a Salt minion on every storage host.
 
-**Status: alpha.** The project has not yet published a package to PyPI. Its API
-surface and state contracts can still change before the first release.
+**Status: alpha.** The package is available from PyPI. Its API surface and state
+contracts can still change between early releases.
 
 ## What is included
 
@@ -83,8 +83,13 @@ does not remove the corresponding Ceph resource.
 
 ## Install and develop
 
-Until the first release, build or install the checkout in the Python environment
-that runs Salt:
+Install the package in the Python environment that runs Salt:
+
+```console
+salt-pip install saltext.ceph
+```
+
+For development, install a checkout with its test dependencies:
 
 ```console
 git clone https://github.com/glebrodionov94/saltext-ceph.git

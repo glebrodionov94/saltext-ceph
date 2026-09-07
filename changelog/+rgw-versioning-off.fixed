@@ -1,1 +1,0 @@
-Accept the Dashboard ``Off`` versioning status for newly created RGW buckets so dry-runs and convergence can enable versioning across Reef and newer Ceph releases.

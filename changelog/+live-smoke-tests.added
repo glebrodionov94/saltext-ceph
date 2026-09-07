@@ -1,2 +1,0 @@
-Add opt-in read-only live Dashboard smoke tests for TLS, authentication, health,
-and cluster identity validation.

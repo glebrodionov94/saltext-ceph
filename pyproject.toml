@@ -63,6 +63,7 @@ Homepage = "https://github.com/glebrodionov94/saltext-ceph"
 Source = "https://github.com/glebrodionov94/saltext-ceph"
 Tracker = "https://github.com/glebrodionov94/saltext-ceph/issues"
 Changelog = "https://github.com/glebrodionov94/saltext-ceph/blob/main/CHANGELOG.md"
+Documentation = "https://glebrodionov94.github.io/saltext-ceph/"
 Security = "https://github.com/glebrodionov94/saltext-ceph/security/policy"
 
 [project.optional-dependencies]

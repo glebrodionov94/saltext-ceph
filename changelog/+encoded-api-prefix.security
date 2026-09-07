@@ -1,1 +1,0 @@
-Reject a percent-encoded `/api` suffix in Dashboard root URLs before attaching credentials.

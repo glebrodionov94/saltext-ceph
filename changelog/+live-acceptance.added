@@ -1,3 +1,0 @@
-An explicitly gated live-cluster suite now validates typed API adapters, real
-Salt execution-module loading, reversible state lifecycles, and destructive
-resource allowlists without storing credentials in the repository.

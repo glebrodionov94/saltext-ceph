@@ -1,2 +1,0 @@
-Prevent the GitOps runner from returning state-job arguments, reject malformed
-beacon API envelopes, and bound beacon configuration and task fingerprint work.

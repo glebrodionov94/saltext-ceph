@@ -1,3 +1,0 @@
-Require explicit confirmation for destructive CephFS execution operations,
-including removals, path replacement, client eviction, retention removal, and
-snapshot-mirroring teardown.

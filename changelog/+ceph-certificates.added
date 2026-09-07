@@ -1,2 +1,0 @@
-Add the read-only ``ceph_certificates`` execution and salt-ssh wrapper modules for
-cephadm certificate inventory, service certificate status, and the public root CA.

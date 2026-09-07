@@ -19,23 +19,21 @@ Complete these steps before setting `CEPH_RELEASES_ENABLED=true`:
    because `setuptools-scm` derives the version from an exact `vMAJOR.MINOR.PATCH`
    tag. The local fallback version exists only so an empty development checkout
    can be built.
-2. Create GitHub environments named `testpypi` and `release`. Require a trusted
-   maintainer's approval for every deployment to `release`. Consider requiring
-   approval for `testpypi` as well.
-3. Configure a pending Trusted Publisher on both package indexes. TestPyPI uses a
-   separate account and configuration from PyPI.
+2. Create a GitHub environment named `release`. Require a trusted maintainer's
+   approval for every deployment after the first unattended bootstrap release.
+3. Configure a pending Trusted Publisher on PyPI.
 
-   | Setting | TestPyPI | PyPI |
-   | --- | --- | --- |
-   | PyPI project name | `saltext.ceph` | `saltext.ceph` |
-   | GitHub owner | `glebrodionov94` | `glebrodionov94` |
-   | GitHub repository | `saltext-ceph` | `saltext-ceph` |
-   | Workflow filename | `deploy-package-action.yml` | `deploy-package-action.yml` |
-   | Environment | `testpypi` | `release` |
+   | Setting | Value |
+   | --- | --- |
+   | PyPI project name | `saltext.ceph` |
+   | GitHub owner | `glebrodionov94` |
+   | GitHub repository | `saltext-ceph` |
+   | Workflow filename | `deploy-package-action.yml` |
+   | Environment | `release` |
 
-   Pending publishers can create the projects on the first upload. Recheck that
-   the project name is still available immediately before registering them.
-4. Do not create `PYPI_API_TOKEN` or `TEST_PYPI_API_TOKEN` repository secrets.
+   A pending publisher can create the project on the first upload. Recheck that
+   the project name is still available immediately before registering it.
+4. Do not create a `PYPI_API_TOKEN` repository secret.
    Revoke any PyPI token that has been pasted into a message, terminal, issue, or
    other place outside the package index.
 5. Protect `main` with the CI status check and review changes to
@@ -117,8 +115,8 @@ git push origin v0.1.0
 ```
 
 The tag workflow verifies the changelog and runs the full CI. After it succeeds,
-the release workflow publishes the same artifacts to TestPyPI, waits for the
-`release` environment approval, publishes to PyPI, and creates a GitHub Release
+the release workflow waits for the `release` environment approval, publishes the
+validated artifacts to PyPI, and creates a GitHub Release
 with the wheel, sdist, and `SHA256SUMS`.
 
 ## Failed or incorrect releases

@@ -1,5 +1,0 @@
-Require an explicit real boolean confirmation for permanent deletion of CephX
-users, pools, cephadm services and hosts, CRUSH rules, erasure-code profiles,
-Dashboard users, and Dashboard roles across raw, execution, wrapper, and state
-interfaces. Low-level mutating ``ceph.query`` calls now require the same explicit
-confirmation and remain unavailable in Salt test mode.

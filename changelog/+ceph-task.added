@@ -1,2 +1,0 @@
-Add Dashboard asynchronous task inspection and bounded, failure-aware polling,
-with safe output defaults and an explicit diagnostic opt-in for raw task details.

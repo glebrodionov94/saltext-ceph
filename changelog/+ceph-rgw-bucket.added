@@ -1,1 +1,0 @@
-Add guarded RGW bucket CRUD, encryption, lifecycle, notification, and rate-limit operations with file-sourced KMS and MFA secrets.

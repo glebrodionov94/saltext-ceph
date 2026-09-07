@@ -1,2 +1,0 @@
-Add an idempotent telemetry opt-in state backed by the persisted manager-module
-enablement flag and guarded by explicit license acceptance.

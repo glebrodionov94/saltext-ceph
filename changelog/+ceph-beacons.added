@@ -1,3 +1,0 @@
-Add read-only, transition-aware Salt beacons for Ceph cluster health, completed
-Dashboard tasks, and cephadm certificate expiry without exposing secret-bearing
-API fields.

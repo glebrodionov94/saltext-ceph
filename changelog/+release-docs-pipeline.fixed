@@ -1,1 +1,0 @@
-Validate the Sphinx Python coverage report from its real output directory and deploy release documentation only after a successful, same-repository release workflow.

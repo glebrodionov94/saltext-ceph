@@ -1,3 +1,0 @@
-Add current-only, secret-safe Dashboard multi-cluster connection management with
-an explicit TLS-verification policy, file-based credentials, redacted reads, URL
-validation, and guarded deletion.

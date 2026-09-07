@@ -1,1 +1,0 @@
-Confirm OSD removal from Dashboard's raw OSD map, tolerating broken removal-task and detailed-list responses while recognizing preserved ``destroyed`` IDs.
